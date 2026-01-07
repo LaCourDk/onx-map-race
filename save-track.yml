@@ -1,0 +1,63 @@
+name: Save track from issue
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  save-track:
+    runs-on: ubuntu-latest
+    if: "startsWith(github.event.issue.title, '[save-track]')"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Save track JSON to data/tracks
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title || '';
+            const body = issue.body || '';
+
+            // derive filename from title or from JSON name
+            let baseName = title.replace(/^\[save-track\]\s*/i, '').trim();
+            let obj;
+            try {
+              obj = JSON.parse(body);
+            } catch (e) {
+              core.setFailed('Issue body is not valid JSON. Please paste the track JSON in the issue body.');
+            }
+
+            if (!obj) return;
+
+            if (!baseName && obj.name) baseName = obj.name;
+            if (!baseName) baseName = 'track';
+
+            const filename = (baseName || 'track').toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '').substring(0,120) + '.json';
+            const path = `data/tracks/${filename}`;
+            const content = JSON.stringify(obj, null, 2);
+
+            // Check if file exists to get sha
+            let sha;
+            try {
+              const existing = await github.repos.getContent({ owner: context.repo.owner, repo: context.repo.repo, path });
+              sha = existing.data.sha;
+            } catch (e) {
+              // not found -> will create
+            }
+
+            await github.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path,
+              message: `Save track ${filename} via issue #${issue.number}`,
+              content: Buffer.from(content).toString('base64'),
+              sha
+            });
+
+            await github.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body: `Saved track as \`${path}\`` });

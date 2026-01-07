@@ -124,6 +124,10 @@
       <select id="langSelect">
         <option value="da">Dansk</option>
         <option value="en">English</option>
+        <option value="no">Norsk</option>
+        <option value="sv">Svenska</option>
+        <option value="pl">Polski</option>
+        <option value="ru">Русский</option>
       </select>
     </div>
   </div>
@@ -309,132 +313,30 @@
   const drawnItems = new L.FeatureGroup().addTo(map);
 
   // =========================
-  // i18n
-  // =========================
-  const i18n = {
-    da: {
-      title:"GTA 5 Track Mapper",
-      subtitle:"Tegn baner/zoner, gem & organiser (kun lokalt)",
-      lang:"Sprog",
-      color:"Farve",
-      weight:"Tykkelse",
-      opacity:"Gennemsigtighed (1 = tydelig)",
-      segment:"Segment-farveskift (klik på linje for at splitte fra punkt og frem)",
-      showHidden:"Vis skjulte baner i menu",
-      showArrows:"Vis retning (pile)",
-      arrowColor: "Pil farve",
-      arrowSize: "Pil størrelse",
-      arrowSpacing: "Pil spacing",
-      clearAll:"Slet alt",
-      png:"Download PNG",
-      library:"Track Library (mapper)",
-      newArea:"Opret ny Area",
-      newType:"Opret ny Race Type",
-      addArea:"Add Area",
-      addType:"Add Type",
-      filterArea:"Filter Area",
-      filterType:"Filter Type",
-      export:"Export / Import",
-      exportTip:"JSON gemmer alt lokalt (ingen upload). Hidden tracks er kun i menu.",
-      pngTip:"This is Still a DEMO Trying to get it working.",
-      noAreas:"(Opret en Area først)",
-      noTypes:"(Opret en Type først)",
-      all:"(Alle)",
-      createNeedLib:"Du skal oprette mindst 1 Area og 1 Race Type i Track Library først.",
-      confirmClear:"Slet ALLE baner og zoner?",
-      confirmDelete:"Slet denne bane / zone?",
-      pngFail:"Der skete en fejl ved eksport til PNG.",
-      importOk:"Import færdig!",
-      importBad:"Kunne ikke parse JSON – tjek teksten.",
-      edit:"Edit",
-      hide:"Hide",
-      unhide:"Unhide",
-      zoom:"Zoom",
-      hiddenTag:"(skjult)",
-      emptyTracks:"Ingen baner (med nuværende filter).",
-      // modal
-      mNew:"Ny bane",
-      mEdit:"Rediger bane",
-      mPick:"Vælg mappe og race type",
-      mName:"Navn",
-      mArea:"Area / Mappe",
-      mType:"Race Type",
-      mHidden:"Hidden (skjul helt på map)",
-      mHiddenHint:"Hidden tracks vises kun i menu når “Vis skjulte” er slået til.",
-      mApplyStyle:"Brug nuværende farve/tykkelse/opacity?",
-      mYes:"Ja",
-      mNo:"Nej",
-      mCancel:"Annuller",
-      mSave:"Gem",
-      mNeedName:"Skriv et navn.",
-      mNeedArea:"Vælg en Area/Mappe.",
-      mNeedType:"Vælg en Race Type."
-    },
-    en: {
-      title:"GTA 5 Track Mapper",
-      subtitle:"Draw tracks/zones, save & organize (local only)",
-      lang:"Language",
-      color:"Color",
-      weight:"Stroke",
-      opacity:"Opacity (1 = solid)",
-      segment:"Segment split (click a line to split from that point onward)",
-      showHidden:"Show hidden tracks in menu",
-      showArrows:"Show direction (arrows)",
-      arrowColor: "Arrow color",
-      arrowSize: "Arrow size",
-      arrowSpacing: "Arrow spacing",
-      clearAll:"Delete all",
-      png:"Download PNG",
-      library:"Track Library (folders)",
-      newArea:"Create new Area",
-      newType:"Create new Race Type",
-      addArea:"Add Area",
-      addType:"Add Type",
-      filterArea:"Filter Area",
-      filterType:"Filter Type",
-      export:"Export / Import",
-      exportTip:"JSON stays local (no upload). Hidden tracks are menu-only.",
-      pngTip:"This is Still a DEMO Trying to get it working .",
-      noAreas:"(Create an Area first)",
-      noTypes:"(Create a Type first)",
-      all:"(All)",
-      createNeedLib:"Create at least 1 Area and 1 Race Type in the Track Library first.",
-      confirmClear:"Delete ALL tracks and zones?",
-      confirmDelete:"Delete this track/zone?",
-      pngFail:"PNG export failed.",
-      importOk:"Import done!",
-      importBad:"Could not parse JSON. Check the text.",
-      edit:"Edit",
-      hide:"Hide",
-      unhide:"Unhide",
-      zoom:"Zoom",
-      hiddenTag:"(hidden)",
-      emptyTracks:"No tracks (with current filter).",
-      // modal
-      mNew:"New track",
-      mEdit:"Edit track",
-      mPick:"Pick folder and race type",
-      mName:"Name",
-      mArea:"Area / Folder",
-      mType:"Race Type",
-      mHidden:"Hidden (remove from map)",
-      mHiddenHint:"Hidden tracks only show in the menu when “Show hidden” is enabled.",
-      mApplyStyle:"Apply current color/weight/opacity?",
-      mYes:"Yes",
-      mNo:"No",
-      mCancel:"Cancel",
-      mSave:"Save",
-      mNeedName:"Please enter a name.",
-      mNeedArea:"Pick an Area/Folder.",
-      mNeedType:"Pick a Race Type."
-    }
-  };
-
+  // i18n loader - language data moved to separate JSON files in /i18n/
   let lang = localStorage.getItem('gta5-lang') || 'da';
-  if (lang !== 'da' && lang !== 'en') lang = 'da';
+  if (!['da','en','no','sv','pl','ru'].includes(lang)) lang = 'da';
   document.getElementById('langSelect').value = lang;
 
-  function t(k){ return i18n[lang][k] || k; }
+  const LANG_DATA = {};
+  function t(k){ return (LANG_DATA[lang] && LANG_DATA[lang][k]) || k; }
+
+  async function loadLanguage(l){
+    try{
+      const res = await fetch(`i18n/${l}.json`);
+      if (!res.ok) throw new Error('Not found');
+      LANG_DATA[l] = await res.json();
+      lang = l;
+      document.getElementById('langSelect').value = lang;
+      localStorage.setItem('gta5-lang', lang);
+      applyLanguage();
+    }catch(err){
+      console.warn('Could not load language', l, err);
+      LANG_DATA[l] = LANG_DATA[l] || {};
+      applyLanguage();
+    }
+  }
+
   function applyLanguage(){
     document.getElementById('ui_title').textContent = t('title');
     document.getElementById('ui_subtitle').textContent = t('subtitle');
@@ -480,9 +382,7 @@
   }
 
   document.getElementById('langSelect').addEventListener('change', (e)=>{
-    lang = e.target.value;
-    localStorage.setItem('gta5-lang', lang);
-    applyLanguage();
+    loadLanguage(e.target.value);
   });
 
   // =========================
@@ -1558,14 +1458,14 @@
   // =========================
   // INIT
   // =========================
-  (function init(){
+  (async function init(){
     loadLibrary();
     loadTracks();
 
     rebuildFilterSelects();
     renderChips();
 
-    applyLanguage();
+    await loadLanguage(lang);
     // make arrow color default to current line color and render arrows
     try { document.getElementById('arrowColorPicker').value = document.getElementById('colorPicker').value; } catch {}
     renderAllVisible();
