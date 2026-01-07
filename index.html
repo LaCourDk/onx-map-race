@@ -57,6 +57,8 @@
     .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #333; border-radius:999px; background:#111; margin:6px 6px 0 0; }
     .chip button { margin:0; padding:2px 8px; font-size:11px; background:#2b2b2b; }
     .chip button:hover { background:#444; }
+    /* compact inputs for library */
+    .small-input { flex:1; padding:6px; border-radius:8px; font-size:12px; background:#101010; color:#eee; border:1px solid #333; }
 
     textarea {
       width:100%; height:120px; background:#101010; color:#eee;
@@ -209,16 +211,22 @@
 
   <div class="row">
     <div>
-      <label id="ui_new_area">Opret ny Area</label>
-      <input type="text" id="newAreaInput" placeholder="Grapeseed">
-      <button id="addAreaBtn">Add Area</button>
-      <div id="areaChips"></div>
+      <label id="ui_new_area">Area</label>
+      <select id="areaSelectCompact"></select>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <input type="text" id="newAreaInput" placeholder="Grapeseed" class="small-input">
+        <button id="addAreaBtn" class="btn-mini">➕</button>
+      </div>
+      <div id="areaListCompact" style="margin-top:8px;"></div>
     </div>
     <div>
-      <label id="ui_new_type">Opret ny Race Type</label>
-      <input type="text" id="newTypeInput" placeholder="Loop Race">
-      <button id="addTypeBtn">Add Type</button>
-      <div id="typeChips"></div>
+      <label id="ui_new_type">Race Type</label>
+      <select id="typeSelectCompact"></select>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <input type="text" id="newTypeInput" placeholder="Loop Race" class="small-input">
+        <button id="addTypeBtn" class="btn-mini">➕</button>
+      </div>
+      <div id="typeListCompact" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -524,16 +532,27 @@
   });
 
   function renderChips(){
-    const areaChips = document.getElementById('areaChips');
-    const typeChips = document.getElementById('typeChips');
-    areaChips.innerHTML = "";
-    typeChips.innerHTML = "";
+    const areaSel = document.getElementById('areaSelectCompact');
+    const typeSel = document.getElementById('typeSelectCompact');
+    const areaList = document.getElementById('areaListCompact');
+    const typeList = document.getElementById('typeListCompact');
+    areaSel.innerHTML = '';
+    typeSel.innerHTML = '';
+    areaList.innerHTML = '';
+    typeList.innerHTML = '';
 
     library.areas.forEach(a=>{
+      const opt = document.createElement('option');
+      opt.value = a;
+      opt.textContent = a;
+      areaSel.appendChild(opt);
+
       const chip = document.createElement('span');
       chip.className = 'chip';
+      chip.style.marginRight = '6px';
       chip.innerHTML = `<span>${escapeHtml(a)}</span>`;
       const x = document.createElement('button');
+      x.className = 'btn-mini';
       x.textContent = 'x';
       x.onclick = ()=>{
         const used = tracks.some(tr => tr.area === a);
@@ -545,14 +564,21 @@
         renderMenu();
       };
       chip.appendChild(x);
-      areaChips.appendChild(chip);
+      areaList.appendChild(chip);
     });
 
     library.types.forEach(rt=>{
+      const opt = document.createElement('option');
+      opt.value = rt;
+      opt.textContent = rt;
+      typeSel.appendChild(opt);
+
       const chip = document.createElement('span');
       chip.className = 'chip';
+      chip.style.marginRight = '6px';
       chip.innerHTML = `<span>${escapeHtml(rt)}</span>`;
       const x = document.createElement('button');
+      x.className = 'btn-mini';
       x.textContent = 'x';
       x.onclick = ()=>{
         const used = tracks.some(tr => tr.raceType === rt);
@@ -564,7 +590,7 @@
         renderMenu();
       };
       chip.appendChild(x);
-      typeChips.appendChild(chip);
+      typeList.appendChild(chip);
     });
   }
 
