@@ -240,11 +240,14 @@
     <button id="exportBtn" title="Export / Import" aria-label="Export">📤</button>
     <button id="importBtn" title="Export / Import" aria-label="Import">📥</button>
     <button id="saveGitBtn">Gem til GitHub</button>
+    <button id="saveSafeBtn" title="Gem til Safe-file">Gem Safe</button>
+    <button id="setSafeBtn" title="Indstil Safe-file">Indstil Safe</button>
     <button id="loadGitBtn">Hent fra GitHub</button>
     <button id="saveAllFilesBtn">Gem alle som filer</button>
     <button id="listFilesBtn">Vis track-filer</button>
   </div>
   <small id="gitStatus" class="muted" style="display:block;margin-top:6px;"></small>
+  <small id="safeFileLabel" class="muted" style="display:block;margin-top:6px;"></small>
 
   <small id="ui_png_tip" style="display:block;margin-top:8px;" class="muted">
     PNG-export virker bedst via localhost (stadig kun dig). file:// kan give CORS-fejl i nogle browsere.
@@ -1393,25 +1396,90 @@
     return name.trim().toLowerCase().replace(/[^a-z0-9-_]+/g,'-').replace(/^-+|-+$/g,'').substring(0,120) || 'track';
   }
 
-  // Save current tracks to GitHub as data/tracks.json
+  // Save current tracks to GitHub (prompt to create a new file or overwrite)
   document.getElementById('saveGitBtn').addEventListener('click', async ()=>{
     const content = JSON.stringify(tracks, null, 2);
     const statusEl = document.getElementById('gitStatus');
+    const name = prompt('Save to GitHub:\n- Enter a NAME to create data/tracks/<name>.json\n- Or leave empty to overwrite data/tracks.json', '');
     statusEl.textContent = 'Saving...';
     try {
-      const res = await fetch('/api/data', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ path: 'data/tracks.json', content, message: 'Update tracks from app' })
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Error');
-      statusEl.textContent = 'Saved to GitHub ✅';
+      if (name && name.trim()) {
+        // create/update a new track file under data/tracks/<sanitized>.json using track/save endpoint
+        const res = await fetch('/api/track/save', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ name: name.trim(), content, message: `Save ${name.trim()} from app` })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Error');
+        const path = json.path || (`data/tracks/${name.trim()}.json`);
+        statusEl.textContent = `Saved to ${path} ✅`;
+        if (confirm('Make this the safe file for quick saves?')) {
+          localStorage.setItem('gta5-safe-file', path);
+          updateSafeLabel();
+        }
+      } else {
+        // overwrite canonical file
+        const res = await fetch('/api/data', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ path: 'data/tracks.json', content, message: 'Update tracks from app' })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Error');
+        statusEl.textContent = 'Saved to data/tracks.json ✅';
+      }
     } catch (err) {
       console.error(err);
       statusEl.textContent = 'Save failed: ' + err.message;
     }
   });
+
+  // Save to the configured "safe" file (set via Set Safe button or when saving a new file)
+  document.getElementById('saveSafeBtn').addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('gitStatus');
+    let path = localStorage.getItem('gta5-safe-file');
+    if (!path) {
+      if (!confirm('No safe file set. Do you want to set one now?')) return;
+      const name = prompt('Enter safe filename (e.g. my-safe or full path data/tracks/my-safe.json):', '');
+      if (!name) return;
+      path = name.includes('/') ? name : `data/tracks/${sanitizeFilename(name)}.json`;
+      localStorage.setItem('gta5-safe-file', path);
+      updateSafeLabel();
+    }
+    const content = JSON.stringify(tracks, null, 2);
+    statusEl.textContent = 'Saving to safe file...';
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ path, content, message: 'Update safe file from app' })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Error');
+      statusEl.textContent = `Saved to ${path} ✅`;
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Save failed: ' + err.message;
+    }
+  });
+
+  // Set or change the safe file path
+  document.getElementById('setSafeBtn').addEventListener('click', ()=>{
+    const name = prompt('Enter safe filename (e.g. my-safe or full path data/tracks/my-safe.json):', '');
+    if (!name) return;
+    const path = name.includes('/') ? name : `data/tracks/${sanitizeFilename(name)}.json`;
+    localStorage.setItem('gta5-safe-file', path);
+    updateSafeLabel();
+  });
+
+  function updateSafeLabel(){
+    const sf = localStorage.getItem('gta5-safe-file');
+    const el = document.getElementById('safeFileLabel');
+    if (!el) return;
+    if (sf) el.textContent = 'Safe file: ' + sf;
+    else el.textContent = 'Safe file: (not set)';
+  }
 
   document.getElementById('loadGitBtn').addEventListener('click', async ()=>{
     const statusEl = document.getElementById('gitStatus');
@@ -1528,6 +1596,7 @@
     renderChips();
 
     await loadLanguage(lang);
+    updateSafeLabel();
     // make arrow color default to current line color and render arrows
     try { document.getElementById('arrowColorPicker').value = document.getElementById('colorPicker').value; } catch {}
     renderAllVisible();
