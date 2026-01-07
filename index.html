@@ -322,6 +322,9 @@
       segment:"Segment-farveskift (klik på linje for at splitte fra punkt og frem)",
       showHidden:"Vis skjulte baner i menu",
       showArrows:"Vis retning (pile)",
+      arrowColor: "Pil farve",
+      arrowSize: "Pil størrelse",
+      arrowSpacing: "Pil spacing",
       clearAll:"Slet alt",
       png:"Download PNG",
       library:"Track Library (mapper)",
@@ -377,6 +380,9 @@
       segment:"Segment split (click a line to split from that point onward)",
       showHidden:"Show hidden tracks in menu",
       showArrows:"Show direction (arrows)",
+      arrowColor: "Arrow color",
+      arrowSize: "Arrow size",
+      arrowSpacing: "Arrow spacing",
       clearAll:"Delete all",
       png:"Download PNG",
       library:"Track Library (folders)",
@@ -438,6 +444,9 @@
     document.getElementById('ui_opacity').textContent = t('opacity');
     document.getElementById('ui_segment').textContent = t('segment');
     document.getElementById('ui_showarrows').textContent = t('showArrows');
+    document.getElementById('ui_arrow_color').textContent = t('arrowColor');
+    document.getElementById('ui_arrow_size').textContent = t('arrowSize');
+    document.getElementById('ui_arrow_spacing').textContent = t('arrowSpacing');
     document.getElementById('ui_showhidden').textContent = t('showHidden');
     document.getElementById('clearAllBtn').textContent = t('clearAll');
     document.getElementById('pngBtn').textContent = t('png');
@@ -728,7 +737,10 @@
 
     if (latlngs.length < 2) return out;
 
-    const spacing = 120; // spacing in map units between arrows (tweakable)
+    const spacing = Number(document.getElementById('arrowSpacing')?.value) || 80; // spacing in map units between arrows
+    const size = Number(document.getElementById('arrowSizePicker')?.value) || 12;
+    const color = document.getElementById('arrowColorPicker')?.value || style.color || '#fff';
+    const opacity = style.opacity || 1;
 
     for (let i=0;i<latlngs.length-1;i++){
       const a = latlngs[i];
@@ -747,8 +759,12 @@
         const px = a.lat + (b.lat - a.lat)*t;
         const py = a.lng + (b.lng - a.lng)*t;
 
-        const svg = `<svg width="12" height="12" viewBox="0 0 12 12" style="transform: rotate(${angle}deg);"><path d="M6 0 L12 12 L6 9 L0 12 Z" fill="${style.color || '#fff'}" opacity="${style.opacity || 1}"/></svg>`;
-        const icon = L.divIcon({ html: svg, className: 'arrow-div-icon', iconSize:[12,12], iconAnchor:[6,6] });
+        const w = size;
+        const h = size;
+        const tip = (w/2).toFixed(2);
+        const mid = (h*0.75).toFixed(2);
+        const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="transform: rotate(${angle}deg);"><path d="M${tip} 0 L ${w} ${h} L ${tip} ${mid} L 0 ${h} Z" fill="${color}" opacity="${opacity}"/></svg>`;
+        const icon = L.divIcon({ html: svg, className: 'arrow-div-icon', iconSize:[w,h], iconAnchor:[Math.round(w/2),Math.round(h/2)] });
         const m = L.marker([px, py], { icon, interactive:false }).addTo(map);
         out.push(m);
       }
