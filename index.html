@@ -143,10 +143,10 @@
       <input type="color" id="arrowColorPicker" value="#ff0000">
 
       <label id="ui_arrow_size" style="margin-top:8px;">Pil størrelse</label>
-      <input type="number" id="arrowSizePicker" value="12" min="6" max="48">
+      <input type="number" id="arrowSizePicker" value="25" min="6" max="200">
 
       <label id="ui_arrow_spacing" style="margin-top:8px;">Pil spacing</label>
-      <input type="number" id="arrowSpacing" value="80" min="20" max="500">
+      <input type="number" id="arrowSpacing" value="5" min="1" max="500">
     </div>
   </div>
 
@@ -725,6 +725,7 @@
   }
 
   // Create small arrow markers along a polyline to show direction
+  // Uses pixel spacing so arrows correctly follow the displayed route
   function makeArrowsForPolyline(layer, style){
     const out = [];
     // flatten latlngs (support MultiLineString style arrays)
@@ -737,35 +738,41 @@
 
     if (latlngs.length < 2) return out;
 
-    const spacing = Number(document.getElementById('arrowSpacing')?.value) || 80; // spacing in map units between arrows
-    const size = Number(document.getElementById('arrowSizePicker')?.value) || 12;
+    const spacing = Number(document.getElementById('arrowSpacing')?.value) || 5; // pixels between arrows
+    const size = Number(document.getElementById('arrowSizePicker')?.value) || 25;
     const color = document.getElementById('arrowColorPicker')?.value || style.color || '#fff';
-    const opacity = style.opacity || 1;
+    const opacity = style.opacity ?? 1;
 
-    for (let i=0;i<latlngs.length-1;i++){
-      const a = latlngs[i];
-      const b = latlngs[i+1];
-      const dx = b.lng - a.lng;
-      const dy = b.lat - a.lat;
+    // convert latlngs to pixel points for accurate spacing
+    const pts = latlngs.map(ll => map.latLngToLayerPoint(ll));
+
+    for (let i=0;i<pts.length-1;i++){
+      const a = pts[i];
+      const b = pts[i+1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
       const segLen = Math.hypot(dx, dy);
       if (segLen < 1e-6) continue;
-      const angle = Math.atan2(dy, dx) * 180 / Math.PI; // degrees
 
-      // number of arrows for this segment
       const count = Math.floor(segLen / spacing);
       for (let k=1;k<=count;k++){
         const t = (k*spacing) / segLen;
         if (t<=0 || t>=1) continue;
-        const px = a.lat + (b.lat - a.lat)*t;
-        const py = a.lng + (b.lng - a.lng)*t;
+        const px = a.x + (b.x - a.x)*t;
+        const py = a.y + (b.y - a.y)*t;
+        const latlng = map.layerPointToLatLng(L.point(px, py));
+
+        // angle based on pixel vector; add 90deg because arrow svg points up by default
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
 
         const w = size;
         const h = size;
         const tip = (w/2).toFixed(2);
         const mid = (h*0.75).toFixed(2);
-        const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="transform: rotate(${angle}deg);"><path d="M${tip} 0 L ${w} ${h} L ${tip} ${mid} L 0 ${h} Z" fill="${color}" opacity="${opacity}"/></svg>`;
+        const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="transform: rotate(${angle}deg); transform-origin: center;">`+
+                    `<path d="M${tip} 0 L ${w} ${h} L ${tip} ${mid} L 0 ${h} Z" fill="${color}" opacity="${opacity}"/></svg>`;
         const icon = L.divIcon({ html: svg, className: 'arrow-div-icon', iconSize:[w,h], iconAnchor:[Math.round(w/2),Math.round(h/2)] });
-        const m = L.marker([px, py], { icon, interactive:false }).addTo(map);
+        const m = L.marker(latlng, { icon, interactive:false }).addTo(map);
         out.push(m);
       }
     }
@@ -800,9 +807,18 @@
         arrows = makeArrowsForPolyline(layer, tr.style);
       }
 
-      // attach arrows to rendered object later
+      // bind click handler for polyline too
+      layer.on('click', (e)=>{
+        const seg = document.getElementById('segmentMode').checked;
+        if (seg && tr.kind === 'polyline') {
+          segmentSplitTrack(tr.id, e.latlng);
+          return;
+        }
+        map.fitBounds(layer.getBounds());
+      });
+
+      // attach arrows to rendered object
       rendered[tr.id] = { layer, labelMarker, startMarker, endMarker, arrows };
-      return;
     }
 
     rendered[tr.id] = { layer, labelMarker, startMarker, endMarker };
@@ -1519,10 +1535,13 @@
   }
 
   document.getElementById('showArrows').addEventListener('change', ()=> updateArrowsForAll());
-  ['arrowColorPicker','arrowSizePicker','arrowSpacing','arrowSpacing','arrowSizePicker','arrowColorPicker','colorPicker'].forEach(id => {
+  ['arrowColorPicker','arrowSizePicker','arrowSpacing','colorPicker'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', ()=> updateArrowsForAll());
   });
+
+  // update arrows when map view/zoom changes so arrows stay on the route
+  map.on('zoomend moveend', ()=> updateArrowsForAll());
 
   document.getElementById('pngBtn').addEventListener('click', ()=>{
     leafletImage(map, (err, canvas)=>{
