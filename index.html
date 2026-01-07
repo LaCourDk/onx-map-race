@@ -122,13 +122,6 @@
         <option value="da">Dansk</option>
         <option value="en">English</option>
       </select>
-
-      <label id="ui_map_label" style="margin-top:8px;">Kort</label>
-      <select id="mapSelect">
-        <option value="gta5-atlas.png">GTA5-Atlas</option>
-        <option value="gta5-roadmap.png">GTA5-roadmap</option>
-        <option value="gta5-Sat.jpg">GTA5-Satellite</option>
-      </select>
     </div>
   </div>
 
@@ -204,19 +197,6 @@
   <div style="margin-top:6px;">
     <button id="exportBtn">Export</button>
     <button id="importBtn">Import</button>
-  </div>
-
-  <div style="margin-top:10px; border:1px dashed #2a2a2a; padding:8px; border-radius:8px;">
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button id="linkFileBtn">Link lokal fil (tracks.json)</button>
-      <button id="saveNowBtn">Gem nu</button>
-      <button id="unlinkFileBtn" style="display:none;">Fjern forbindelse</button>
-      <label style="margin-left:auto;"><input type="checkbox" id="autoSaveFile"> Auto-save til fil</label>
-    </div>
-    <small id="fileStatus" class="muted">Ingen fil tilsluttet</small>
-    <div style="margin-top:6px;">
-      <small class="muted">Tip: vælg `tracks.json` i dit repo. Kør <code>node scripts/auto-commit.js</code> i terminal for automatisk git-commit på ændringer.</small>
-    </div>
   </div>
 
   <small id="ui_png_tip" style="display:block;margin-top:8px;" class="muted">
@@ -300,10 +280,7 @@
   });
 
   const bounds = [[0,0],[imageHeight,imageWidth]];
-  // Base overlay (selectable). Default comes from localStorage or falls back to 'gta5-map.jpg'
-  const BASE_IMAGE_KEY = 'gta5-base-image';
-  let baseImage = localStorage.getItem(BASE_IMAGE_KEY) || 'gta5-map.jpg';
-  const baseOverlay = L.imageOverlay(baseImage, bounds).addTo(map);
+  L.imageOverlay('gta5-map.jpg', bounds).addTo(map);
   map.fitBounds(bounds);
 
   // Layers drawn (visible only)
@@ -317,7 +294,6 @@
       title:"GTA 5 Track Mapper",
       subtitle:"Tegn baner/zoner, gem & organiser (kun lokalt)",
       lang:"Sprog",
-      map:"Kort",
       color:"Farve",
       weight:"Tykkelse",
       opacity:"Gennemsigtighed (1 = tydelig)",
@@ -372,7 +348,6 @@
       title:"GTA 5 Track Mapper",
       subtitle:"Draw tracks/zones, save & organize (local only)",
       lang:"Language",
-      map:"Map",
       color:"Color",
       weight:"Stroke",
       opacity:"Opacity (1 = solid)",
@@ -434,7 +409,6 @@
     document.getElementById('ui_title').textContent = t('title');
     document.getElementById('ui_subtitle').textContent = t('subtitle');
     document.getElementById('ui_lang_label').textContent = t('lang');
-    document.getElementById('ui_map_label').textContent = t('map');
     document.getElementById('ui_color').textContent = t('color');
     document.getElementById('ui_weight').textContent = t('weight');
     document.getElementById('ui_opacity').textContent = t('opacity');
@@ -476,17 +450,6 @@
     localStorage.setItem('gta5-lang', lang);
     applyLanguage();
   });
-
-  // Map selector: allow choosing different base images and persist selection
-  const mapSelect = document.getElementById('mapSelect');
-  if (mapSelect) mapSelect.value = baseImage;
-  function setBaseImage(url){
-    try { baseOverlay.setUrl(url); } catch(e) { console.warn('Failed to set base image', e); }
-    localStorage.setItem(BASE_IMAGE_KEY, url);
-  }
-  if (mapSelect) mapSelect.addEventListener('change', (e)=>{ setBaseImage(e.target.value); });
-
-
 
   // =========================
   // STYLE CONTROLS
@@ -691,112 +654,9 @@
   // rendered[id] = { layer, labelMarker, startMarker, endMarker }
   const rendered = Object.create(null);
 
-  // Optional File System Access: allow writing `tracks.json` directly into your repo
-  const FS_DB = 'gta5_fs_handles';
-  const FS_STORE = 'handles';
-  const FS_KEY = 'tracks';
-  let tracksFileHandle = null;
-  let autoSaveToFile = false;
-
   function saveTracks(){
     localStorage.setItem(TRACKS_KEY, JSON.stringify(tracks));
-    // If auto-save to file is enabled and we have a file handle, write the file in background
-    if (autoSaveToFile && tracksFileHandle) {
-      try { writeTracksFile().catch(e => console.warn('Failed to write tracks file', e)); } catch(e){ console.warn(e); }
-    }
   }
-
-  // ---- IndexedDB helpers to persist file handle (structured clone)
-  function openFSDB(){
-    return new Promise((resolve, reject)=>{
-      const req = indexedDB.open(FS_DB, 1);
-      req.onupgradeneeded = (e)=> {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(FS_STORE)) db.createObjectStore(FS_STORE);
-      };
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> reject(req.error);
-    });
-  }
-
-  async function saveHandleToIDB(handle){
-    const db = await openFSDB();
-    return new Promise((resolve, reject)=>{
-      const tx = db.transaction(FS_STORE, 'readwrite');
-      tx.objectStore(FS_STORE).put(handle, FS_KEY);
-      tx.oncomplete = ()=> resolve();
-      tx.onerror = ()=> reject(tx.error);
-    });
-  }
-
-  async function getHandleFromIDB(){
-    const db = await openFSDB();
-    return new Promise((resolve, reject)=>{
-      const tx = db.transaction(FS_STORE, 'readonly');
-      const req = tx.objectStore(FS_STORE).get(FS_KEY);
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> reject(req.error);
-    });
-  }
-
-  async function removeHandleFromIDB(){
-    const db = await openFSDB();
-    return new Promise((resolve, reject)=>{
-      const tx = db.transaction(FS_STORE, 'readwrite');
-      tx.objectStore(FS_STORE).delete(FS_KEY);
-      tx.oncomplete = ()=> resolve();
-      tx.onerror = ()=> reject(tx.error);
-    });
-  }
-
-  async function writeTracksFile(){
-    if (!tracksFileHandle) throw new Error('No file handle');
-    const data = JSON.stringify(tracks, null, 2);
-    const writable = await tracksFileHandle.createWritable();
-    await writable.write(data);
-    await writable.close();
-    const s = document.getElementById('fileStatus');
-    if (s) s.textContent = 'Sidst gemt: ' + new Date().toLocaleString();
-  }
-
-  async function pickTracksFile(){
-    if (!window.showOpenFilePicker && !window.showSaveFilePicker) {
-      alert('Din browser understøtter ikke File System Access API. Brug export/import i stedet.');
-      return;
-    }
-    try {
-      let handle;
-      if (window.showOpenFilePicker) {
-        const [h] = await window.showOpenFilePicker({ types:[{description:'JSON', accept:{'application/json':['.json']}}], multiple:false });
-        handle = h;
-      } else {
-        handle = await window.showSaveFilePicker({ suggestedName:'tracks.json', types:[{description:'JSON', accept:{'application/json':['.json']}}] });
-      }
-      tracksFileHandle = handle;
-      await saveHandleToIDB(handle);
-      const unlinkBtn = document.getElementById('unlinkFileBtn'); if (unlinkBtn) unlinkBtn.style.display='inline-block';
-      const s = document.getElementById('fileStatus'); if (s) s.textContent = 'Forbundet: ' + (handle.name || 'tracks.json');
-    } catch(e){
-      console.warn('File pick canceled or failed', e);
-    }
-  }
-
-  async function unlinkTracksFile(){
-    tracksFileHandle = null;
-    try { await removeHandleFromIDB(); } catch(e){/*ignore*/}
-    const unlinkBtn = document.getElementById('unlinkFileBtn'); if (unlinkBtn) unlinkBtn.style.display='none';
-    const s = document.getElementById('fileStatus'); if (s) s.textContent = 'Ingen fil tilsluttet';
-  }
-
-  // UI wiring
-  const linkFileBtn = document.getElementById('linkFileBtn');
-  const saveNowBtn = document.getElementById('saveNowBtn');
-  const unlinkFileBtn = document.getElementById('unlinkFileBtn');
-  const autoSaveCheckbox = document.getElementById('autoSaveFile');
-  if (linkFileBtn) linkFileBtn.addEventListener('click', async ()=>{ await pickTracksFile(); });
-  if (saveNowBtn) saveNowBtn.addEventListener('click', async ()=>{ try { if (tracksFileHandle) { await writeTracksFile(); alert('Gemt til fil'); } else { alert('Ingen fil tilsluttet'); } } catch(e){ alert('Fejl ved gem: ' + e.message); } });
-  if (unlinkFileBtn) unlinkFileBtn.addEventListener('click', async ()=>{ await unlinkTracksFile(); });
-  if (autoSaveCheckbox) autoSaveCheckbox.addEventListener('change', (e)=>{ autoSaveToFile = !!e.target.checked; localStorage.setItem('gta5-auto-file', autoSaveToFile ? '1' : '0'); });
 
   function loadTracks(){
     const raw = localStorage.getItem(TRACKS_KEY);
@@ -847,35 +707,6 @@
       if (ends) {
         startMarker = L.marker(ends.start, { icon:startIcon, draggable:true }).addTo(map);
         endMarker   = L.marker(ends.end,   { icon:endIcon,   draggable:true }).addTo(map);
-
-        // Attach drag handlers so users' moving of flags updates the stored feature and is saved immediately
-        startMarker.on('dragend', ()=>{
-          const latlng = startMarker.getLatLng();
-          const pts = normalizeLatLngs(layer.getLatLngs());
-          if (pts.length >= 2) {
-            pts[0] = latlng;
-            const l = L.polyline(pts);
-            tr.feature = l.toGeoJSON();
-            tr.feature.properties = { kind:'polyline' };
-            saveTracks();
-            refreshRenderedForTrack(tr);
-            renderMenu();
-          }
-        });
-
-        endMarker.on('dragend', ()=>{
-          const latlng = endMarker.getLatLng();
-          const pts = normalizeLatLngs(layer.getLatLngs());
-          if (pts.length >= 2) {
-            pts[pts.length-1] = latlng;
-            const l = L.polyline(pts);
-            tr.feature = l.toGeoJSON();
-            tr.feature.properties = { kind:'polyline' };
-            saveTracks();
-            refreshRenderedForTrack(tr);
-            renderMenu();
-          }
-        });
       }
     }
 
@@ -944,38 +775,6 @@
         if (!obj.endMarker)   obj.endMarker   = L.marker(ends.end,   { icon:endIcon,   draggable:true }).addTo(map);
         obj.startMarker.setLatLng(ends.start);
         obj.endMarker.setLatLng(ends.end);
-
-        // Remove previous handlers if present and attach fresh dragend handlers
-        if (obj.startMarker.off) obj.startMarker.off('dragend');
-        if (obj.endMarker.off) obj.endMarker.off('dragend');
-
-        obj.startMarker.on('dragend', ()=>{
-          const latlng = obj.startMarker.getLatLng();
-          const pts = normalizeLatLngs(obj.layer.getLatLngs());
-          if (pts.length >= 2) {
-            pts[0] = latlng;
-            const l = L.polyline(pts);
-            tr.feature = l.toGeoJSON();
-            tr.feature.properties = { kind:'polyline' };
-            saveTracks();
-            refreshRenderedForTrack(tr);
-            renderMenu();
-          }
-        });
-
-        obj.endMarker.on('dragend', ()=>{
-          const latlng = obj.endMarker.getLatLng();
-          const pts = normalizeLatLngs(obj.layer.getLatLngs());
-          if (pts.length >= 2) {
-            pts[pts.length-1] = latlng;
-            const l = L.polyline(pts);
-            tr.feature = l.toGeoJSON();
-            tr.feature.properties = { kind:'polyline' };
-            saveTracks();
-            refreshRenderedForTrack(tr);
-            renderMenu();
-          }
-        });
       }
     } else {
       // not polyline => remove flags if any
@@ -1485,7 +1284,7 @@
   // =========================
   // INIT
   // =========================
-  (async function init(){
+  (function init(){
     loadLibrary();
     loadTracks();
 
@@ -1495,29 +1294,6 @@
     applyLanguage();
     renderAllVisible();
     renderMenu();
-
-    // restore file handle from indexedDB (if user previously linked a file)
-    try {
-      const h = await getHandleFromIDB();
-      if (h) {
-        tracksFileHandle = h;
-        if (h.queryPermission) {
-          let p = await h.queryPermission({mode:'readwrite'});
-          if (p !== 'granted' && h.requestPermission) {
-            try { await h.requestPermission({mode:'readwrite'}); } catch(e) { /* user denied */ }
-          }
-        }
-        const unlinkBtn = document.getElementById('unlinkFileBtn'); if (unlinkBtn) unlinkBtn.style.display='inline-block';
-        const s = document.getElementById('fileStatus'); if (s) s.textContent = 'Forbundet: ' + (h.name || 'tracks.json');
-      }
-    } catch(e){ console.warn('Failed to restore file handle', e); }
-
-    // restore auto-save checkbox state
-    try {
-      const val = localStorage.getItem('gta5-auto-file') === '1';
-      autoSaveToFile = val;
-      const cb = document.getElementById('autoSaveFile'); if (cb) cb.checked = val;
-    } catch(e){}
   })();
 </script>
 </body>
