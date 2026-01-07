@@ -126,20 +126,8 @@
       <select id="langSelect">
         <option value="da">DA</option>
         <option value="en">EN</option>
-        <option value="no">NO</option>
-        <option value="sv">SV</option>
-        <option value="pl">PL</option>
-        <option value="ru">RU</option>
         <option value="de">DE</option>
-        <option value="fr">FR</option>
         <option value="es">ES</option>
-        <option value="it">IT</option>
-        <option value="nl">NL</option>
-        <option value="pt">PT</option>
-        <option value="fi">FI</option>
-        <option value="zh">ZH</option>
-        <option value="ja">JA</option>
-        <option value="ko">KO</option>
       </select>
     </div>
   </div>
@@ -348,7 +336,7 @@
   // =========================
   // i18n loader - language data moved to separate JSON files in /i18n/
   let lang = localStorage.getItem('gta5-lang') || 'da';
-  if (!['da','en','no','sv','pl','ru','de','fr','es','it','nl','pt','fi','zh','ja','ko'].includes(lang)) lang = 'da';
+  if (!['da','en','de','es'].includes(lang)) lang = 'da';
   document.getElementById('langSelect').value = lang;
 
   const LANG_DATA = {};
