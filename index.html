@@ -199,6 +199,8 @@
     <button id="importBtn">Import</button>
     <button id="saveGitBtn">Gem til GitHub</button>
     <button id="loadGitBtn">Hent fra GitHub</button>
+    <button id="saveAllFilesBtn">Gem alle som filer</button>
+    <button id="listFilesBtn">Vis track-filer</button>
   </div>
   <small id="gitStatus" class="muted" style="display:block;margin-top:6px;"></small>
 
@@ -1208,9 +1210,80 @@
             renderMenu();
           };
 
+          const saveFileBtn = document.createElement('button');
+          saveFileBtn.className = 'btn-mini';
+          saveFileBtn.textContent = 'Gem fil';
+          saveFileBtn.onclick = async ()=>{
+            const suggested = tr.name;
+            const fname = prompt('Filnavn', suggested);
+            if (!fname) return;
+            const statusEl = document.getElementById('gitStatus');
+            statusEl.textContent = 'Saving...';
+            try {
+              const res = await fetch('/api/track/save', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ name: fname, content: JSON.stringify(tr, null, 2), message: `Save ${fname} from app` })
+              });
+              const json = await res.json();
+              if (!res.ok) throw new Error(json.message || 'Error');
+              statusEl.textContent = 'Saved file: ' + json.path;
+            } catch (err) {
+              console.error(err);
+              statusEl.textContent = 'Save failed: ' + err.message;
+            }
+          };
+
+          const saveIssueBtn = document.createElement('button');
+          saveIssueBtn.className = 'btn-mini';
+          saveIssueBtn.textContent = 'Gem via Issue';
+          saveIssueBtn.title = 'Åbn en GitHub issue for at gemme denne track via Actions';
+          saveIssueBtn.onclick = ()=>{
+            // open a prefilled GitHub new issue page with title [save-track] NAME and body = JSON
+            const owner = 'LaCourDk';
+            const repo = 'onx-map-race';
+            const title = encodeURIComponent('[save-track] ' + tr.name);
+            const body = encodeURIComponent(JSON.stringify(tr, null, 2));
+            const url = `https://github.com/${owner}/${repo}/issues/new?title=${title}&body=${body}`;
+            window.open(url, '_blank');
+          };
+
+          const loadFileBtn = document.createElement('button');
+          loadFileBtn.className = 'btn-mini';
+          loadFileBtn.textContent = 'Hent fil';
+          loadFileBtn.onclick = async ()=>{
+            const suggested = tr.name;
+            const fname = prompt('Filnavn at hente', suggested);
+            if (!fname) return;
+            const statusEl = document.getElementById('gitStatus');
+            statusEl.textContent = 'Loading...';
+            try {
+              const res = await fetch('/api/track?name=' + encodeURIComponent(fname.endsWith('.json') ? fname.slice(0, -5) : fname));
+              if (!res.ok) throw new Error('File not found');
+              const json = await res.json();
+              const obj = JSON.parse(json.content);
+              const idx = tracks.findIndex(x => x.id === tr.id);
+              if (idx !== -1) {
+                tracks[idx] = obj;
+              } else {
+                tracks.push(obj);
+              }
+              saveTracks();
+              renderAllVisible();
+              renderMenu();
+              statusEl.textContent = 'Loaded file into app';
+            } catch (err) {
+              console.error(err);
+              statusEl.textContent = 'Load failed: ' + err.message;
+            }
+          };
+
           item.appendChild(name);
           item.appendChild(zoomBtn);
           item.appendChild(editBtn);
+          item.appendChild(saveFileBtn);
+          item.appendChild(saveIssueBtn);
+          item.appendChild(loadFileBtn);
           item.appendChild(hideBtn);
           item.appendChild(delBtn);
 
@@ -1272,6 +1345,11 @@
     }
   });
 
+  // helper to sanitize filenames
+  function sanitizeFilename(name){
+    return name.trim().toLowerCase().replace(/[^a-z0-9-_]+/g,'-').replace(/^-+|-+$/g,'').substring(0,120) || 'track';
+  }
+
   // Save current tracks to GitHub as data/tracks.json
   document.getElementById('saveGitBtn').addEventListener('click', async ()=>{
     const content = JSON.stringify(tracks, null, 2);
@@ -1306,6 +1384,57 @@
     } catch (err) {
       console.error(err);
       statusEl.textContent = 'Load failed: ' + err.message;
+    }
+  });
+
+  // Save all tracks as individual files under data/tracks/
+  document.getElementById('saveAllFilesBtn').addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('gitStatus');
+    statusEl.textContent = 'Saving all...';
+    let success = 0, fail = 0;
+    for (const tr of tracks) {
+      try {
+        const res = await fetch('/api/track/save', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ name: tr.name, content: JSON.stringify(tr, null, 2), message: `Save ${tr.name} from app` })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Error');
+        success++;
+      } catch (err) {
+        console.error(err);
+        fail++;
+      }
+    }
+    statusEl.textContent = `Saved ${success} files, ${fail} failed`;
+  });
+
+  // List files in data/tracks and allow loading one into the app
+  document.getElementById('listFilesBtn').addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('gitStatus');
+    statusEl.textContent = 'Listing files...';
+    try {
+      const res = await fetch('/api/list?path=data/tracks');
+      if (!res.ok) throw new Error('Could not list files');
+      const json = await res.json();
+      const names = json.files.map(f => f.name).join('\n');
+      const pick = prompt('Available files:\n' + names + '\n\nType filename to load (e.g. little-soul.json or name without .json)');
+      if (!pick) { statusEl.textContent = ''; return; }
+      const name = pick.endsWith('.json') ? pick.slice(0, -5) : pick;
+      const g = await fetch('/api/track?name=' + encodeURIComponent(name));
+      if (!g.ok) throw new Error('File not found');
+      const gj = await g.json();
+      const obj = JSON.parse(gj.content);
+      // add as new track
+      tracks.push(obj);
+      saveTracks();
+      renderAllVisible();
+      renderMenu();
+      statusEl.textContent = 'Loaded file into app';
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'List/load failed: ' + err.message;
     }
   });
 
