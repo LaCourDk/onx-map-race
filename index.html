@@ -124,22 +124,22 @@
     <div style="max-width:140px;">
       <label id="ui_lang_label">Sprog</label>
       <select id="langSelect">
-        <option value="da">Dansk</option>
-        <option value="en">English</option>
-        <option value="no">Norsk</option>
-        <option value="sv">Svenska</option>
-        <option value="pl">Polski</option>
-        <option value="ru">Русский</option>
-        <option value="de">Deutsch</option>
-        <option value="fr">Français</option>
-        <option value="es">Español</option>
-        <option value="it">Italiano</option>
-        <option value="nl">Nederlands</option>
-        <option value="pt">Português</option>
-        <option value="fi">Suomi</option>
-        <option value="zh">中文</option>
-        <option value="ja">日本語</option>
-        <option value="ko">한국어</option>
+        <option value="da">DA</option>
+        <option value="en">EN</option>
+        <option value="no">NO</option>
+        <option value="sv">SV</option>
+        <option value="pl">PL</option>
+        <option value="ru">RU</option>
+        <option value="de">DE</option>
+        <option value="fr">FR</option>
+        <option value="es">ES</option>
+        <option value="it">IT</option>
+        <option value="nl">NL</option>
+        <option value="pt">PT</option>
+        <option value="fi">FI</option>
+        <option value="zh">ZH</option>
+        <option value="ja">JA</option>
+        <option value="ko">KO</option>
       </select>
     </div>
   </div>
@@ -352,7 +352,14 @@
   document.getElementById('langSelect').value = lang;
 
   const LANG_DATA = {};
-  function t(k){ return (LANG_DATA[lang] && LANG_DATA[lang][k]) || k; }
+  // Minimal inline fallback for offline/file:// use — only includes keys used by the top UI.
+  window.I18N_MIN_FALLBACK = {
+    "en": {"title":"GTA 5 Track Mapper","subtitle":"Draw tracks/zones, save & organise (local only)","lang":"EN"},
+    "da": {"title":"GTA 5 Track Mapper","subtitle":"Tegn baner/zoner, gem & organiser (kun lokalt)","lang":"DA"},
+    "de": {"title":"GTA 5 Track Mapper","subtitle":"Zeichne Strecken/Zonen, speichern & organisieren (nur lokal)","lang":"DE"},
+    "es": {"title":"GTA 5 Track Mapper","subtitle":"Dibuja pistas/zonas, guarda y organiza (solo local)","lang":"ES"}
+  };
+  function t(k){ return (LANG_DATA[lang] && LANG_DATA[lang][k]) || (window.I18N_MIN_FALLBACK[lang] && window.I18N_MIN_FALLBACK[lang][k]) || k; }
 
   async function loadLanguage(l){
     try{
@@ -365,7 +372,15 @@
       applyLanguage();
     }catch(err){
       console.warn('Could not load language', l, err);
-      LANG_DATA[l] = LANG_DATA[l] || {};
+      if (window.I18N_MIN_FALLBACK && window.I18N_MIN_FALLBACK[l]) {
+        LANG_DATA[l] = window.I18N_MIN_FALLBACK[l];
+        lang = l;
+        document.getElementById('langSelect').value = lang;
+        localStorage.setItem('gta5-lang', lang);
+        console.info('Using inline fallback for language', l);
+      } else {
+        LANG_DATA[l] = LANG_DATA[l] || {};
+      }
       applyLanguage();
     }
   }
