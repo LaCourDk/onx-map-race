@@ -138,7 +138,7 @@
   <div class="row">
     <div>
       <label id="ui_color">Farve</label>
-      <input type="color" id="colorPicker" value="#00fffb">
+      <input type="color" id="colorPicker" value="#0000ff">
     </div>
     <div>
       <label id="ui_weight">Tykkelse</label>
@@ -149,7 +149,7 @@
   <div class="row">
     <div>
       <label id="ui_arrow_color">Pil farve</label>
-      <input type="color" id="arrowColorPicker" value="#00fffb">
+      <input type="color" id="arrowColorPicker" value="#ff0000">
     </div>
     <div>
       <label id="ui_arrow_size">Pil størrelse</label>
@@ -1597,8 +1597,7 @@
 
     await loadLanguage(lang);
     updateSafeLabel();
-    // make arrow color default to current line color and render arrows
-    try { document.getElementById('arrowColorPicker').value = document.getElementById('colorPicker').value; } catch {}
+    // render arrows with their configured color
     renderAllVisible();
     updateArrowsForAll();
     renderMenu();
