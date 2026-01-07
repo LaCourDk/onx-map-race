@@ -1503,8 +1503,7 @@
     }
   });
 
-  // show/hide arrows toggle handler
-  document.getElementById('showArrows').addEventListener('change', ()=>{
+  function updateArrowsForAll(){
     Object.keys(rendered).forEach(id => {
       const obj = rendered[id];
       if (!obj || !obj.layer) return;
@@ -1517,6 +1516,12 @@
         obj.arrows = makeArrowsForPolyline(obj.layer, tr.style);
       }
     });
+  }
+
+  document.getElementById('showArrows').addEventListener('change', ()=> updateArrowsForAll());
+  ['arrowColorPicker','arrowSizePicker','arrowSpacing','arrowSpacing','arrowSizePicker','arrowColorPicker','colorPicker'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', ()=> updateArrowsForAll());
   });
 
   document.getElementById('pngBtn').addEventListener('click', ()=>{
@@ -1542,7 +1547,10 @@
     renderChips();
 
     applyLanguage();
+    // make arrow color default to current line color and render arrows
+    try { document.getElementById('arrowColorPicker').value = document.getElementById('colorPicker').value; } catch {}
     renderAllVisible();
+    updateArrowsForAll();
     renderMenu();
   })();
 </script>
