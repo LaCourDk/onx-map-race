@@ -138,6 +138,15 @@
     <div>
       <label id="ui_weight">Tykkelse</label>
       <input type="number" id="sizePicker" value="4" min="1" max="20">
+
+      <label id="ui_arrow_color" style="margin-top:8px;">Pil farve</label>
+      <input type="color" id="arrowColorPicker" value="#ff0000">
+
+      <label id="ui_arrow_size" style="margin-top:8px;">Pil størrelse</label>
+      <input type="number" id="arrowSizePicker" value="12" min="6" max="48">
+
+      <label id="ui_arrow_spacing" style="margin-top:8px;">Pil spacing</label>
+      <input type="number" id="arrowSpacing" value="80" min="20" max="500">
     </div>
   </div>
 
@@ -1290,44 +1299,6 @@
             renderMenu();
           };
 
-          const saveFileBtn = document.createElement('button');
-          saveFileBtn.className = 'btn-mini';
-          saveFileBtn.textContent = 'Gem fil';
-          saveFileBtn.onclick = async ()=>{
-            const suggested = tr.name;
-            const fname = prompt('Filnavn', suggested);
-            if (!fname) return;
-            const statusEl = document.getElementById('gitStatus');
-            statusEl.textContent = 'Saving...';
-            try {
-              const res = await fetch('/api/track/save', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ name: fname, content: JSON.stringify(tr, null, 2), message: `Save ${fname} from app` })
-              });
-              const json = await res.json();
-              if (!res.ok) throw new Error(json.message || 'Error');
-              statusEl.textContent = 'Saved file: ' + json.path;
-            } catch (err) {
-              console.error(err);
-              statusEl.textContent = 'Save failed: ' + err.message;
-            }
-          };
-
-          const saveIssueBtn = document.createElement('button');
-          saveIssueBtn.className = 'btn-mini';
-          saveIssueBtn.textContent = 'Gem via Issue';
-          saveIssueBtn.title = 'Åbn en GitHub issue for at gemme denne track via Actions';
-          saveIssueBtn.onclick = ()=>{
-            // open a prefilled GitHub new issue page with title [save-track] NAME and body = JSON
-            const owner = 'LaCourDk';
-            const repo = 'onx-map-race';
-            const title = encodeURIComponent('[save-track] ' + tr.name);
-            const body = encodeURIComponent(JSON.stringify(tr, null, 2));
-            const url = `https://github.com/${owner}/${repo}/issues/new?title=${title}&body=${body}`;
-            window.open(url, '_blank');
-          };
-
           const loadFileBtn = document.createElement('button');
           loadFileBtn.className = 'btn-mini';
           loadFileBtn.textContent = 'Hent fil';
@@ -1361,8 +1332,6 @@
           item.appendChild(name);
           item.appendChild(zoomBtn);
           item.appendChild(editBtn);
-          item.appendChild(saveFileBtn);
-          item.appendChild(saveIssueBtn);
           item.appendChild(loadFileBtn);
           item.appendChild(hideBtn);
           item.appendChild(delBtn);
