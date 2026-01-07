@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>GTA5 Track Mapper</title>
+
+  <!-- Leaflet + Draw -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+
+  <style>
+    html, body { margin:0; padding:0; height:100%; overflow:hidden; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:#111; color:#eee; }
+    #map { position:absolute; top:0; left:0; right:390px; bottom:0; }
+    #sidebar { position:absolute; top:0; right:0; width:390px; bottom:0; background:#181818; border-left:1px solid #333; padding:10px; box-sizing:border-box; overflow-y:auto; font-size:13px; }
+
+    h2 { margin:0 0 6px 0; font-size:18px; }
+    h3 { margin:12px 0 6px 0; font-size:14px; }
+    label { display:block; margin-top:6px; margin-bottom:2px; }
+
+    input[type="color"], input[type="number"], input[type="range"], select, input[type="text"] {
+      width:100%; box-sizing:border-box; margin-bottom:4px;
+      background:#101010; color:#eee; border:1px solid #333; border-radius:8px; padding:8px;
+    }
+    input[type="checkbox"] { transform: translateY(1px); }
+
+    button {
+      margin-top:4px; margin-right:6px;
+      background:#333; color:#eee; border:none; border-radius:8px;
+      padding:8px 10px; cursor:pointer; font-size:12px;
+    }
+    button:hover { background:#555; }
+
+    small { color:#aaa; }
+    hr { border:none; border-top:1px solid #2a2a2a; margin:10px 0; }
+
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1; }
+
+    .folder { border:1px solid #333; border-radius:12px; margin:8px 0; overflow:hidden; }
+    .folder summary { cursor:pointer; padding:10px; background:#202020; user-select:none; }
+    .folder summary:hover { background:#262626; }
+    .folder .content { padding:8px; background:#171717; }
+
+    .subfolder { border:1px solid #2f2f2f; border-radius:12px; margin:8px 0; overflow:hidden; }
+    .subfolder summary { cursor:pointer; padding:8px; background:#1f1f1f; user-select:none; font-size:12px; }
+    .subfolder .content { padding:6px; background:#141414; }
+
+    .track-item {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      padding:8px; background:#232323; border-radius:10px; margin:6px 0;
+    }
+    .track-item .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+    .pill { font-size:10px; padding:2px 8px; border:1px solid #444; border-radius:999px; color:#ddd; background:#111; }
+    .btn-mini { padding:6px 8px; font-size:11px; margin:0; border-radius:10px; }
+
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid #333; border-radius:999px; background:#111; margin:6px 6px 0 0; }
+    .chip button { margin:0; padding:2px 8px; font-size:11px; background:#2b2b2b; }
+    .chip button:hover { background:#444; }
+
+    textarea {
+      width:100%; height:120px; background:#101010; color:#eee;
+      border:1px solid #333; border-radius:10px; font-size:11px;
+      padding:8px; box-sizing:border-box; resize:vertical;
+    }
+    .muted { color:#9a9a9a; }
+
+    /* Modal */
+    .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:9999; }
+    .modal-card {
+      width:620px; max-width:calc(100vw - 20px);
+      margin:24px auto; background:#181818; border:1px solid #333; border-radius:14px; padding:12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+    }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .modal-title { font-size:16px; font-weight:900; }
+    .modal-sub { font-size:12px; color:#aaa; margin-top:2px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+    .modal-actions button { margin:0; }
+
+    /* Box-pick tiles */
+    .boxgrid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+    .boxpick {
+      display:flex; align-items:center; gap:8px;
+      padding:10px; border:1px solid #333; border-radius:12px;
+      background:#111; cursor:pointer; user-select:none;
+      transition: background .12s ease, border-color .12s ease;
+    }
+    .boxpick:hover { background:#151515; border-color:#4a4a4a; }
+    .boxpick .tick {
+      width:18px; height:18px; border-radius:7px; border:1px solid #444;
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; color:#111; background:#0f0f0f;
+    }
+    .boxpick.selected { border-color:#e6e6e6; background:#1a1a1a; }
+    .boxpick.selected .tick { background:#ddd; color:#111; border-color:#ddd; }
+    .boxpick .txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    /* Yes/No pill buttons */
+    .yesno { display:flex; gap:8px; margin-top:6px; }
+    .yesno button { flex:1; margin:0; border-radius:999px; background:#2b2b2b; }
+    .yesno button.active { background:#e6e6e6; color:#111; }
+
+    /* Simple label + flags */
+    .lap-label { background: rgba(0,0,0,0.75); color:#fff; padding:2px 6px; border-radius:8px; font-size:11px; white-space:nowrap; border:1px solid #444; }
+    .flag-icon { font-size:18px; text-shadow: 0 0 3px #000; }
+  </style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<div id="sidebar">
+  <div class="row">
+    <div>
+      <h2 id="ui_title">GTA 5 Track Mapper</h2>
+      <small id="ui_subtitle">Tegn baner/zoner, gem & organiser (kun lokalt)</small>
+    </div>
+    <div style="max-width:140px;">
+      <label id="ui_lang_label">Sprog</label>
+      <select id="langSelect">
+        <option value="da">Dansk</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <div>
+      <label id="ui_color">Farve</label>
+      <input type="color" id="colorPicker" value="#ff0000">
+    </div>
+    <div>
+      <label id="ui_weight">Tykkelse</label>
+      <input type="number" id="sizePicker" value="4" min="1" max="20">
+    </div>
+  </div>
+
+  <label id="ui_opacity">Gennemsigtighed (1 = tydelig)</label>
+  <input type="range" id="opacityPicker" min="0.1" max="1" step="0.05" value="1">
+  <small><span id="opacityValue">1.00</span></small>
+
+  <label style="margin-top:8px;">
+    <input type="checkbox" id="segmentMode">
+    <span id="ui_segment">Segment-farveskift (klik på linje for at splitte fra punkt og frem)</span>
+  </label>
+
+  <label style="margin-top:6px;">
+    <input type="checkbox" id="showHidden">
+    <span id="ui_showhidden">Vis skjulte baner i menu</span>
+  </label>
+
+  <div style="margin-top:8px;">
+    <button id="clearAllBtn">Slet alt</button>
+    <button id="pngBtn">Download PNG</button>
+  </div>
+
+  <hr>
+
+  <h3 id="ui_library">Track Library (mapper)</h3>
+
+  <div class="row">
+    <div>
+      <label id="ui_new_area">Opret ny Area</label>
+      <input type="text" id="newAreaInput" placeholder="Grapeseed">
+      <button id="addAreaBtn">Add Area</button>
+      <div id="areaChips"></div>
+    </div>
+    <div>
+      <label id="ui_new_type">Opret ny Race Type</label>
+      <input type="text" id="newTypeInput" placeholder="Loop Race">
+      <button id="addTypeBtn">Add Type</button>
+      <div id="typeChips"></div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:8px;">
+    <div>
+      <label id="ui_filter_area">Filter Area</label>
+      <select id="filterAreaSelect"></select>
+    </div>
+    <div>
+      <label id="ui_filter_type">Filter Type</label>
+      <select id="filterTypeSelect"></select>
+    </div>
+  </div>
+
+  <div id="folders"></div>
+
+  <hr>
+
+  <h3 id="ui_export">Export / Import</h3>
+  <small id="ui_export_tip">JSON gemmer alt lokalt (ingen upload). Hidden tracks er kun i menu.</small>
+  <textarea id="exportArea"></textarea>
+  <div style="margin-top:6px;">
+    <button id="exportBtn">Export</button>
+    <button id="importBtn">Import</button>
+  </div>
+
+  <small id="ui_png_tip" style="display:block;margin-top:8px;" class="muted">
+    PNG-export virker bedst via localhost (stadig kun dig). file:// kan give CORS-fejl i nogle browsere.
+  </small>
+</div>
+
+<!-- Create/Edit Modal -->
+<div id="trackModal" class="modal-backdrop">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <div id="tm_title" class="modal-title">Ny bane</div>
+        <div id="tm_sub" class="modal-sub">Vælg mappe og race type</div>
+      </div>
+      <button id="tm_close" class="btn-mini">X</button>
+    </div>
+
+    <hr>
+
+    <label id="tm_name_label">Navn</label>
+    <input id="tm_name" type="text" placeholder="Navn på bane">
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <div id="tm_area_label" style="font-weight:800; margin-bottom:6px;">Area / Mappe</div>
+        <div id="tm_area_grid" class="boxgrid"></div>
+      </div>
+      <div>
+        <div id="tm_type_label" style="font-weight:800; margin-bottom:6px;">Race Type</div>
+        <div id="tm_type_grid" class="boxgrid"></div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label style="margin-top:0;">
+          <input type="checkbox" id="tm_hidden">
+          <span id="tm_hidden_label">Hidden (skjul helt på map)</span>
+        </label>
+        <small class="muted" id="tm_hidden_hint">Hidden tracks vises kun i menu når “Vis skjulte” er slået til.</small>
+      </div>
+      <div>
+        <label id="tm_apply_style_label" style="margin-top:0;">Brug nuværende farve/tykkelse/opacity?</label>
+        <div class="yesno">
+          <button id="tm_style_yes" type="button">Ja</button>
+          <button id="tm_style_no" type="button">Nej</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="tm_cancel">Annuller</button>
+      <button id="tm_save" style="background:#3a3a3a;">Gem</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leaflet + Draw + Leaflet-Image -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/leaflet-image/leaflet-image.js"></script>
+
+<script>
+  // =========================
+  // CONFIG: your image
+  // Put gta5-map.html + gta5-map.jpg in same folder.
+  // =========================
+  const imageWidth = 1507;
+  const imageHeight = 2048;
+
+  // =========================
+  // MAP
+  // =========================
+  const map = L.map('map', {
+    crs: L.CRS.Simple,
+    minZoom: -2,
+    maxZoom: 4,
+    zoomSnap: 0.25,
+    attributionControl: false
+  });
+
+  const bounds = [[0,0],[imageHeight,imageWidth]];
+  L.imageOverlay('gta5-map.jpg', bounds).addTo(map);
+  map.fitBounds(bounds);
+
+  // Layers drawn (visible only)
+  const drawnItems = new L.FeatureGroup().addTo(map);
+
+  // =========================
+  // i18n
+  // =========================
+  const i18n = {
+    da: {
+      title:"GTA 5 Track Mapper",
+      subtitle:"Tegn baner/zoner, gem & organiser (kun lokalt)",
+      lang:"Sprog",
+      color:"Farve",
+      weight:"Tykkelse",
+      opacity:"Gennemsigtighed (1 = tydelig)",
+      segment:"Segment-farveskift (klik på linje for at splitte fra punkt og frem)",
+      showHidden:"Vis skjulte baner i menu",
+      clearAll:"Slet alt",
+      png:"Download PNG",
+      library:"Track Library (mapper)",
+      newArea:"Opret ny Area",
+      newType:"Opret ny Race Type",
+      addArea:"Add Area",
+      addType:"Add Type",
+      filterArea:"Filter Area",
+      filterType:"Filter Type",
+      export:"Export / Import",
+      exportTip:"JSON gemmer alt lokalt (ingen upload). Hidden tracks er kun i menu.",
+      pngTip:"PNG-export virker bedst via localhost (stadig kun dig). file:// kan give CORS-fejl i nogle browsere.",
+      noAreas:"(Opret en Area først)",
+      noTypes:"(Opret en Type først)",
+      all:"(Alle)",
+      createNeedLib:"Du skal oprette mindst 1 Area og 1 Race Type i Track Library først.",
+      confirmClear:"Slet ALLE baner og zoner?",
+      confirmDelete:"Slet denne bane / zone?",
+      pngFail:"Der skete en fejl ved eksport til PNG.",
+      importOk:"Import færdig!",
+      importBad:"Kunne ikke parse JSON – tjek teksten.",
+      edit:"Edit",
+      hide:"Hide",
+      unhide:"Unhide",
+      zoom:"Zoom",
+      hiddenTag:"(skjult)",
+      emptyTracks:"Ingen baner (med nuværende filter).",
+      // modal
+      mNew:"Ny bane",
+      mEdit:"Rediger bane",
+      mPick:"Vælg mappe og race type",
+      mName:"Navn",
+      mArea:"Area / Mappe",
+      mType:"Race Type",
+      mHidden:"Hidden (skjul helt på map)",
+      mHiddenHint:"Hidden tracks vises kun i menu når “Vis skjulte” er slået til.",
+      mApplyStyle:"Brug nuværende farve/tykkelse/opacity?",
+      mYes:"Ja",
+      mNo:"Nej",
+      mCancel:"Annuller",
+      mSave:"Gem",
+      mNeedName:"Skriv et navn.",
+      mNeedArea:"Vælg en Area/Mappe.",
+      mNeedType:"Vælg en Race Type."
+    },
+    en: {
+      title:"GTA 5 Track Mapper",
+      subtitle:"Draw tracks/zones, save & organize (local only)",
+      lang:"Language",
+      color:"Color",
+      weight:"Stroke",
+      opacity:"Opacity (1 = solid)",
+      segment:"Segment split (click a line to split from that point onward)",
+      showHidden:"Show hidden tracks in menu",
+      clearAll:"Delete all",
+      png:"Download PNG",
+      library:"Track Library (folders)",
+      newArea:"Create new Area",
+      newType:"Create new Race Type",
+      addArea:"Add Area",
+      addType:"Add Type",
+      filterArea:"Filter Area",
+      filterType:"Filter Type",
+      export:"Export / Import",
+      exportTip:"JSON stays local (no upload). Hidden tracks are menu-only.",
+      pngTip:"PNG export works best via localhost (still only you). file:// may cause CORS errors in some browsers.",
+      noAreas:"(Create an Area first)",
+      noTypes:"(Create a Type first)",
+      all:"(All)",
+      createNeedLib:"Create at least 1 Area and 1 Race Type in the Track Library first.",
+      confirmClear:"Delete ALL tracks and zones?",
+      confirmDelete:"Delete this track/zone?",
+      pngFail:"PNG export failed.",
+      importOk:"Import done!",
+      importBad:"Could not parse JSON. Check the text.",
+      edit:"Edit",
+      hide:"Hide",
+      unhide:"Unhide",
+      zoom:"Zoom",
+      hiddenTag:"(hidden)",
+      emptyTracks:"No tracks (with current filter).",
+      // modal
+      mNew:"New track",
+      mEdit:"Edit track",
+      mPick:"Pick folder and race type",
+      mName:"Name",
+      mArea:"Area / Folder",
+      mType:"Race Type",
+      mHidden:"Hidden (remove from map)",
+      mHiddenHint:"Hidden tracks only show in the menu when “Show hidden” is enabled.",
+      mApplyStyle:"Apply current color/weight/opacity?",
+      mYes:"Yes",
+      mNo:"No",
+      mCancel:"Cancel",
+      mSave:"Save",
+      mNeedName:"Please enter a name.",
+      mNeedArea:"Pick an Area/Folder.",
+      mNeedType:"Pick a Race Type."
+    }
+  };
+
+  let lang = localStorage.getItem('gta5-lang') || 'da';
+  if (lang !== 'da' && lang !== 'en') lang = 'da';
+  document.getElementById('langSelect').value = lang;
+
+  function t(k){ return i18n[lang][k] || k; }
+  function applyLanguage(){
+    document.getElementById('ui_title').textContent = t('title');
+    document.getElementById('ui_subtitle').textContent = t('subtitle');
+    document.getElementById('ui_lang_label').textContent = t('lang');
+    document.getElementById('ui_color').textContent = t('color');
+    document.getElementById('ui_weight').textContent = t('weight');
+    document.getElementById('ui_opacity').textContent = t('opacity');
+    document.getElementById('ui_segment').textContent = t('segment');
+    document.getElementById('ui_showhidden').textContent = t('showHidden');
+    document.getElementById('clearAllBtn').textContent = t('clearAll');
+    document.getElementById('pngBtn').textContent = t('png');
+    document.getElementById('ui_library').textContent = t('library');
+    document.getElementById('ui_new_area').textContent = t('newArea');
+    document.getElementById('ui_new_type').textContent = t('newType');
+    document.getElementById('addAreaBtn').textContent = t('addArea');
+    document.getElementById('addTypeBtn').textContent = t('addType');
+    document.getElementById('ui_filter_area').textContent = t('filterArea');
+    document.getElementById('ui_filter_type').textContent = t('filterType');
+    document.getElementById('ui_export').textContent = t('export');
+    document.getElementById('ui_export_tip').textContent = t('exportTip');
+    document.getElementById('ui_png_tip').textContent = t('pngTip');
+
+    // modal
+    document.getElementById('tm_sub').textContent = t('mPick');
+    document.getElementById('tm_name_label').textContent = t('mName');
+    document.getElementById('tm_area_label').textContent = t('mArea');
+    document.getElementById('tm_type_label').textContent = t('mType');
+    document.getElementById('tm_hidden_label').textContent = t('mHidden');
+    document.getElementById('tm_hidden_hint').textContent = t('mHiddenHint');
+    document.getElementById('tm_apply_style_label').textContent = t('mApplyStyle');
+    document.getElementById('tm_style_yes').textContent = t('mYes');
+    document.getElementById('tm_style_no').textContent = t('mNo');
+    document.getElementById('tm_cancel').textContent = t('mCancel');
+    document.getElementById('tm_save').textContent = t('mSave');
+
+    rebuildFilterSelects();
+    renderChips();
+    renderMenu();
+  }
+
+  document.getElementById('langSelect').addEventListener('change', (e)=>{
+    lang = e.target.value;
+    localStorage.setItem('gta5-lang', lang);
+    applyLanguage();
+  });
+
+  // =========================
+  // STYLE CONTROLS
+  // =========================
+  const opacitySlider = document.getElementById('opacityPicker');
+  const opacityValueLabel = document.getElementById('opacityValue');
+  opacityValueLabel.textContent = Number(opacitySlider.value).toFixed(2);
+  opacitySlider.addEventListener('input', ()=> opacityValueLabel.textContent = Number(opacitySlider.value).toFixed(2));
+
+  function currentStyle(){
+    const opacity = Number(document.getElementById('opacityPicker').value);
+    return {
+      color: document.getElementById('colorPicker').value,
+      weight: Number(document.getElementById('sizePicker').value),
+      opacity,
+      fillOpacity: opacity
+    };
+  }
+
+  // =========================
+  // FLAGS + LABEL ICONS
+  // =========================
+  const startIcon = L.divIcon({ className:'flag-icon', html:'🚩', iconSize:[20,20], iconAnchor:[10,20] });
+  const endIcon   = L.divIcon({ className:'flag-icon', html:'🏁', iconSize:[20,20], iconAnchor:[10,20] });
+
+  function makeLabelIcon(text){
+    return L.divIcon({ className:'lap-label', html: escapeHtml(text) });
+  }
+
+  function normalizeLatLngs(latlngs){
+    if (!latlngs || !latlngs.length) return [];
+    if (Array.isArray(latlngs[0])) return latlngs[0];
+    return latlngs;
+  }
+
+  function getPolylineEnds(layer){
+    const pts = normalizeLatLngs(layer.getLatLngs());
+    if (pts.length < 2) return null;
+    return { start: pts[0], end: pts[pts.length-1] };
+  }
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'","&#039;");
+  }
+
+  // =========================
+  // LIBRARY (Areas / Types)
+  // =========================
+  const LIB_KEY = 'gta5_library_v3';
+  let library = {
+    areas: ["Grapeseed","Downtown"],
+    types: ["Straight Line Race","Loop Race"]
+  };
+
+  function norm(s){ return (s||"").trim(); }
+  function uniquePush(arr, value){
+    const v = norm(value);
+    if (!v) return false;
+    if (arr.some(x => x.toLowerCase() === v.toLowerCase())) return false;
+    arr.push(v);
+    arr.sort((a,b)=>a.localeCompare(b));
+    return true;
+  }
+
+  function loadLibrary(){
+    const raw = localStorage.getItem(LIB_KEY);
+    if (!raw) return;
+    try {
+      const obj = JSON.parse(raw);
+      if (obj && Array.isArray(obj.areas) && Array.isArray(obj.types)) {
+        library.areas = obj.areas.map(norm).filter(Boolean);
+        library.types = obj.types.map(norm).filter(Boolean);
+      }
+    } catch {}
+  }
+  function saveLibrary(){
+    localStorage.setItem(LIB_KEY, JSON.stringify(library));
+  }
+  function ensureLibraryValue(area, type){
+    let changed = false;
+    if (area) changed = uniquePush(library.areas, area) || changed;
+    if (type) changed = uniquePush(library.types, type) || changed;
+    if (changed) saveLibrary();
+  }
+
+  document.getElementById('addAreaBtn').addEventListener('click', ()=>{
+    const v = document.getElementById('newAreaInput').value;
+    if (uniquePush(library.areas, v)) {
+      document.getElementById('newAreaInput').value = "";
+      saveLibrary();
+      rebuildFilterSelects();
+      renderChips();
+      renderMenu();
+    }
+  });
+
+  document.getElementById('addTypeBtn').addEventListener('click', ()=>{
+    const v = document.getElementById('newTypeInput').value;
+    if (uniquePush(library.types, v)) {
+      document.getElementById('newTypeInput').value = "";
+      saveLibrary();
+      rebuildFilterSelects();
+      renderChips();
+      renderMenu();
+    }
+  });
+
+  function renderChips(){
+    const areaChips = document.getElementById('areaChips');
+    const typeChips = document.getElementById('typeChips');
+    areaChips.innerHTML = "";
+    typeChips.innerHTML = "";
+
+    library.areas.forEach(a=>{
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `<span>${escapeHtml(a)}</span>`;
+      const x = document.createElement('button');
+      x.textContent = 'x';
+      x.onclick = ()=>{
+        const used = tracks.some(tr => tr.area === a);
+        if (used) return alert(`"${a}" is used by tracks. Change tracks first.`);
+        library.areas = library.areas.filter(v => v !== a);
+        saveLibrary();
+        rebuildFilterSelects();
+        renderChips();
+        renderMenu();
+      };
+      chip.appendChild(x);
+      areaChips.appendChild(chip);
+    });
+
+    library.types.forEach(rt=>{
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `<span>${escapeHtml(rt)}</span>`;
+      const x = document.createElement('button');
+      x.textContent = 'x';
+      x.onclick = ()=>{
+        const used = tracks.some(tr => tr.raceType === rt);
+        if (used) return alert(`"${rt}" is used by tracks. Change tracks first.`);
+        library.types = library.types.filter(v => v !== rt);
+        saveLibrary();
+        rebuildFilterSelects();
+        renderChips();
+        renderMenu();
+      };
+      chip.appendChild(x);
+      typeChips.appendChild(chip);
+    });
+  }
+
+  function rebuildFilterSelects(){
+    const fA = document.getElementById('filterAreaSelect');
+    const fT = document.getElementById('filterTypeSelect');
+
+    function fill(sel, values, emptyLabel){
+      sel.innerHTML = "";
+      const all = document.createElement('option');
+      all.value = "";
+      all.textContent = t('all');
+      sel.appendChild(all);
+      if (values.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = "";
+        opt.textContent = emptyLabel;
+        sel.appendChild(opt);
+        return;
+      }
+      values.forEach(v=>{
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      });
+    }
+
+    fill(fA, library.areas, t('noAreas'));
+    fill(fT, library.types, t('noTypes'));
+  }
+
+  document.getElementById('filterAreaSelect').addEventListener('change', renderMenu);
+  document.getElementById('filterTypeSelect').addEventListener('change', renderMenu);
+  document.getElementById('showHidden').addEventListener('change', renderMenu);
+
+  // =========================
+  // TRACK STORAGE (GeoJSON only)
+  // Hidden tracks are NOT rendered on map.
+  // =========================
+  const TRACKS_KEY = 'gta5_tracks_v5';
+
+  // Track record (stored):
+  // { id, name, area, raceType, kind:'polyline'|'rectangle', hidden:boolean, style:{color,weight,opacity}, feature:GeoJSONFeature }
+  let tracks = [];
+
+  // Rendered objects (only for visible tracks)
+  // rendered[id] = { layer, labelMarker, startMarker, endMarker }
+  const rendered = Object.create(null);
+
+  function saveTracks(){
+    localStorage.setItem(TRACKS_KEY, JSON.stringify(tracks));
+  }
+
+  function loadTracks(){
+    const raw = localStorage.getItem(TRACKS_KEY);
+    if (!raw) return;
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        tracks = arr;
+        // ensure library has imported values
+        tracks.forEach(tr => ensureLibraryValue(tr.area, tr.raceType));
+        saveLibrary();
+      }
+    } catch {}
+  }
+
+  // =========================
+  // Render / Unrender track
+  // =========================
+  function featureToLeafletLayer(feature, style){
+    const layer = L.geoJSON(feature, { style: { ...style, fillOpacity: style.opacity } }).getLayers()[0];
+    return layer;
+  }
+
+  function calcBoundsFromFeature(feature){
+    // use Leaflet quickly by creating temp layer
+    const tmp = L.geoJSON(feature);
+    return tmp.getBounds();
+  }
+
+  function applyStyleToLayer(layer, style){
+    if (layer && layer.setStyle) layer.setStyle({ ...style, fillOpacity: style.opacity });
+  }
+
+  function renderTrackOnMap(tr){
+    if (tr.hidden) return; // never render hidden
+    if (rendered[tr.id]) return;
+
+    const layer = featureToLeafletLayer(tr.feature, tr.style);
+    layer.addTo(drawnItems);
+
+    // label
+    const labelMarker = L.marker(layer.getBounds().getCenter(), { icon: makeLabelIcon(tr.name), interactive:false }).addTo(map);
+
+    // flags for polyline
+    let startMarker = null, endMarker = null;
+    if (tr.kind === 'polyline') {
+      const ends = getPolylineEnds(layer);
+      if (ends) {
+        startMarker = L.marker(ends.start, { icon:startIcon, draggable:true }).addTo(map);
+        endMarker   = L.marker(ends.end,   { icon:endIcon,   draggable:true }).addTo(map);
+      }
+    }
+
+    // clicks
+    layer.on('click', (e)=>{
+      const seg = document.getElementById('segmentMode').checked;
+      if (seg && tr.kind === 'polyline') {
+        segmentSplitTrack(tr.id, e.latlng);
+        return;
+      }
+      map.fitBounds(layer.getBounds());
+    });
+
+    rendered[tr.id] = { layer, labelMarker, startMarker, endMarker };
+  }
+
+  function unrenderTrackFromMap(id){
+    const obj = rendered[id];
+    if (!obj) return;
+    try { drawnItems.removeLayer(obj.layer); } catch {}
+    try { map.removeLayer(obj.labelMarker); } catch {}
+    if (obj.startMarker) { try { map.removeLayer(obj.startMarker); } catch {} }
+    if (obj.endMarker)   { try { map.removeLayer(obj.endMarker); } catch {} }
+    delete rendered[id];
+  }
+
+  function refreshRenderedForTrack(tr){
+    // if hidden => remove
+    if (tr.hidden) {
+      unrenderTrackFromMap(tr.id);
+      return;
+    }
+    // ensure rendered exists
+    renderTrackOnMap(tr);
+
+    const obj = rendered[tr.id];
+    if (!obj) return;
+
+    // update geometry
+    const newLayer = featureToLeafletLayer(tr.feature, tr.style);
+    // replace old layer in group
+    drawnItems.removeLayer(obj.layer);
+    newLayer.addTo(drawnItems);
+
+    // rebind click handler
+    newLayer.on('click', (e)=>{
+      const seg = document.getElementById('segmentMode').checked;
+      if (seg && tr.kind === 'polyline') {
+        segmentSplitTrack(tr.id, e.latlng);
+        return;
+      }
+      map.fitBounds(newLayer.getBounds());
+    });
+
+    obj.layer = newLayer;
+
+    // update label
+    obj.labelMarker.setLatLng(newLayer.getBounds().getCenter());
+    obj.labelMarker.setIcon(makeLabelIcon(tr.name));
+
+    // update flags
+    if (tr.kind === 'polyline') {
+      const ends = getPolylineEnds(newLayer);
+      if (ends) {
+        if (!obj.startMarker) obj.startMarker = L.marker(ends.start, { icon:startIcon, draggable:true }).addTo(map);
+        if (!obj.endMarker)   obj.endMarker   = L.marker(ends.end,   { icon:endIcon,   draggable:true }).addTo(map);
+        obj.startMarker.setLatLng(ends.start);
+        obj.endMarker.setLatLng(ends.end);
+      }
+    } else {
+      // not polyline => remove flags if any
+      if (obj.startMarker) { map.removeLayer(obj.startMarker); obj.startMarker = null; }
+      if (obj.endMarker)   { map.removeLayer(obj.endMarker); obj.endMarker = null; }
+    }
+  }
+
+  function renderAllVisible(){
+    // clear map layers
+    Object.keys(rendered).forEach(id => unrenderTrackFromMap(id));
+    tracks.forEach(tr => { if (!tr.hidden) renderTrackOnMap(tr); });
+  }
+
+  // =========================
+  // Leaflet Draw Control (edit visible layers only)
+  // =========================
+  const drawControl = new L.Control.Draw({
+    edit: { featureGroup: drawnItems, edit: true, remove: false },
+    draw: {
+      polyline: { shapeOptions: currentStyle },
+      rectangle:{ shapeOptions: currentStyle },
+      polygon:false, circle:false, marker:false, circlemarker:false
+    }
+  });
+  map.addControl(drawControl);
+
+  // When user edits shapes on map, we must write back to matching track feature
+  map.on(L.Draw.Event.EDITED, (event)=>{
+    event.layers.eachLayer(layer=>{
+      const id = findTrackIdByRenderedLayer(layer);
+      if (!id) return;
+      const tr = tracks.find(x=>x.id===id);
+      if (!tr) return;
+
+      tr.feature = layer.toGeoJSON();
+      // keep properties minimal
+      if (tr.kind === 'polyline') tr.feature.properties = { kind:'polyline' };
+      if (tr.kind === 'rectangle') tr.feature.properties = { kind:'rectangle' };
+
+      saveTracks();
+      // refresh label/flags after geometry update
+      refreshRenderedForTrack(tr);
+    });
+    renderMenu();
+  });
+
+  function findTrackIdByRenderedLayer(layer){
+    for (const id in rendered){
+      if (rendered[id].layer === layer) return id;
+    }
+    return null;
+  }
+
+  // =========================
+  // Create track: Draw -> Modal (box click)
+  // =========================
+  map.on(L.Draw.Event.CREATED, (event)=>{
+    if (library.areas.length === 0 || library.types.length === 0) {
+      alert(t('createNeedLib'));
+      return;
+    }
+    const kind = (event.layerType === 'rectangle') ? 'rectangle' : 'polyline';
+    // Add temporarily so user sees it while modal is open
+    const tempLayer = event.layer;
+    tempLayer.addTo(drawnItems);
+
+    openTrackModal({
+      mode: 'create',
+      targetId: null,
+      tempLayer,
+      kind,
+      preset: {
+        name: (kind === 'polyline') ? 'New Lap' : 'New Zone',
+        area: library.areas[0],
+        type: library.types[0],
+        hidden: false,
+        applyStyle: true
+      }
+    });
+  });
+
+  // =========================
+  // Segment split (Race -> Chase) with modal boxes
+  // =========================
+  function distanceSq(a,b){ const dx=a.lat-b.lat, dy=a.lng-b.lng; return dx*dx+dy*dy; }
+
+  function segmentSplitTrack(trackId, clickLatLng){
+    const tr = tracks.find(x=>x.id===trackId);
+    if (!tr || tr.hidden || tr.kind !== 'polyline') return;
+
+    // must be rendered to split (needs latlngs)
+    const obj = rendered[tr.id];
+    if (!obj) return;
+
+    const pts = normalizeLatLngs(obj.layer.getLatLngs());
+    if (pts.length < 2) return;
+
+    // find nearest vertex
+    let bestIdx=0, bestDist=Infinity;
+    pts.forEach((p,i)=>{
+      const d = distanceSq(p, clickLatLng);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    });
+
+    if (bestIdx === 0 || bestIdx === pts.length-1) {
+      // treat as "apply style to whole"
+      const s = currentStyle();
+      tr.style = { color:s.color, weight:s.weight, opacity:s.opacity };
+      saveTracks();
+      refreshRenderedForTrack(tr);
+      renderMenu();
+      return;
+    }
+
+    const pts1 = pts.slice(0, bestIdx+1);
+    const pts2 = pts.slice(bestIdx);
+
+    // update original geometry to pts1
+    const l1 = L.polyline(pts1);
+    tr.feature = l1.toGeoJSON();
+    tr.feature.properties = { kind:'polyline' };
+    saveTracks();
+    refreshRenderedForTrack(tr);
+
+    // create new track from pts2 via modal (boxes)
+    const tempLayer = L.polyline(pts2, currentStyle()).addTo(drawnItems);
+
+    openTrackModal({
+      mode: 'create',
+      targetId: null,
+      tempLayer,
+      kind: 'polyline',
+      preset: {
+        name: `${tr.name} (Chase)`,
+        area: tr.area,
+        type: tr.raceType,
+        hidden: false,
+        applyStyle: true
+      }
+    });
+  }
+
+  // =========================
+  // MODAL: create/edit with box-click + Yes/No for style
+  // =========================
+  const modal = document.getElementById('trackModal');
+  const tmTitle = document.getElementById('tm_title');
+  const tmName = document.getElementById('tm_name');
+  const tmAreaGrid = document.getElementById('tm_area_grid');
+  const tmTypeGrid = document.getElementById('tm_type_grid');
+  const tmHidden = document.getElementById('tm_hidden');
+  const yesBtn = document.getElementById('tm_style_yes');
+  const noBtn  = document.getElementById('tm_style_no');
+
+  let modalState = null;
+  // modalState:
+  // { mode:'create'|'edit', targetId, tempLayer, kind, selectedArea, selectedType, applyStyle:boolean }
+
+  function setYesNo(activeYes){
+    modalState.applyStyle = !!activeYes;
+    yesBtn.classList.toggle('active', modalState.applyStyle);
+    noBtn.classList.toggle('active', !modalState.applyStyle);
+  }
+
+  yesBtn.addEventListener('click', ()=> setYesNo(true));
+  noBtn.addEventListener('click', ()=> setYesNo(false));
+
+  document.getElementById('tm_close').addEventListener('click', ()=> closeModal(false));
+  document.getElementById('tm_cancel').addEventListener('click', ()=> closeModal(false));
+  document.getElementById('tm_save').addEventListener('click', ()=> saveModal());
+
+  function buildBoxGrid(container, values, initialValue, onPick){
+    container.innerHTML = '';
+    values.forEach(v=>{
+      const div = document.createElement('div');
+      div.className = 'boxpick' + ((v === initialValue) ? ' selected' : '');
+      div.innerHTML = `<div class="tick">✓</div><div class="txt">${escapeHtml(v)}</div>`;
+      div.onclick = ()=>{
+        Array.from(container.querySelectorAll('.boxpick')).forEach(x=>x.classList.remove('selected'));
+        div.classList.add('selected');
+        onPick(v);
+      };
+      container.appendChild(div);
+    });
+  }
+
+  function openTrackModal({ mode, targetId, tempLayer, kind, preset }){
+    modalState = {
+      mode,
+      targetId,
+      tempLayer: tempLayer || null,
+      kind,
+      selectedArea: preset.area || null,
+      selectedType: preset.type || null,
+      applyStyle: !!preset.applyStyle
+    };
+
+    tmTitle.textContent = (mode === 'edit') ? t('mEdit') : t('mNew');
+    tmName.value = preset.name || '';
+    tmHidden.checked = !!preset.hidden;
+
+    buildBoxGrid(tmAreaGrid, library.areas, modalState.selectedArea, (v)=>{ modalState.selectedArea = v; });
+    buildBoxGrid(tmTypeGrid, library.types, modalState.selectedType, (v)=>{ modalState.selectedType = v; });
+
+    setYesNo(modalState.applyStyle);
+
+    modal.style.display = 'block';
+    setTimeout(()=> tmName.focus(), 50);
+  }
+
+  function closeModal(keepTempLayer){
+    modal.style.display = 'none';
+
+    // If creating and user cancels, remove temp layer from map
+    if (modalState && modalState.mode === 'create' && modalState.tempLayer && !keepTempLayer) {
+      try { drawnItems.removeLayer(modalState.tempLayer); } catch {}
+    }
+
+    modalState = null;
+  }
+
+  function saveModal(){
+    if (!modalState) return;
+
+    const name = (tmName.value || '').trim();
+    if (!name) { alert(t('mNeedName')); return; }
+    if (!modalState.selectedArea) { alert(t('mNeedArea')); return; }
+    if (!modalState.selectedType) { alert(t('mNeedType')); return; }
+
+    ensureLibraryValue(modalState.selectedArea, modalState.selectedType);
+    saveLibrary();
+    rebuildFilterSelects();
+    renderChips();
+
+    const hidden = !!tmHidden.checked;
+
+    if (modalState.mode === 'create') {
+      const layer = modalState.tempLayer;
+      if (!layer) return;
+
+      // style
+      let style = currentStyle();
+      // apply style to layer so user sees final
+      applyStyleToLayer(layer, style);
+
+      // store feature
+      const feature = layer.toGeoJSON();
+      feature.properties = { kind: modalState.kind };
+
+      const tr = {
+        id: crypto.randomUUID(),
+        name,
+        area: modalState.selectedArea,
+        raceType: modalState.selectedType,
+        kind: modalState.kind,
+        hidden,
+        style: { color: style.color, weight: style.weight, opacity: style.opacity },
+        feature
+      };
+
+      tracks.push(tr);
+      saveTracks();
+
+      // remove temp layer from map (we will re-render properly)
+      try { drawnItems.removeLayer(layer); } catch {}
+
+      if (!tr.hidden) renderTrackOnMap(tr);
+      renderMenu();
+
+      closeModal(true);
+      return;
+    }
+
+    // EDIT existing
+    if (modalState.mode === 'edit') {
+      const tr = tracks.find(x => x.id === modalState.targetId);
+      if (!tr) { closeModal(true); return; }
+
+      tr.name = name;
+      tr.area = modalState.selectedArea;
+      tr.raceType = modalState.selectedType;
+      tr.hidden = hidden;
+
+      if (modalState.applyStyle) {
+        const s = currentStyle();
+        tr.style = { color:s.color, weight:s.weight, opacity:s.opacity };
+      }
+
+      saveTracks();
+      refreshRenderedForTrack(tr);
+      renderMenu();
+      closeModal(true);
+    }
+  }
+
+  // =========================
+  // MENU (folders + hide/unhide) + filters
+  // =========================
+  function passesFilters(tr){
+    const fa = document.getElementById('filterAreaSelect').value;
+    const ft = document.getElementById('filterTypeSelect').value;
+    if (fa && tr.area !== fa) return false;
+    if (ft && tr.raceType !== ft) return false;
+    return true;
+  }
+
+  function renderMenu(){
+    const container = document.getElementById('folders');
+    container.innerHTML = '';
+
+    const showHidden = document.getElementById('showHidden').checked;
+
+    const visibleInMenu = tracks
+      .filter(tr => passesFilters(tr))
+      .filter(tr => showHidden ? true : !tr.hidden);
+
+    // group by area -> type
+    const byArea = new Map();
+    for (const tr of visibleInMenu) {
+      const a = tr.area || 'Unsorted';
+      if (!byArea.has(a)) byArea.set(a, []);
+      byArea.get(a).push(tr);
+    }
+
+    const areas = Array.from(byArea.keys()).sort((a,b)=>a.localeCompare(b));
+    if (areas.length === 0) {
+      const empty = document.createElement('small');
+      empty.textContent = t('emptyTracks');
+      container.appendChild(empty);
+      return;
+    }
+
+    for (const area of areas) {
+      const areaTracks = byArea.get(area);
+      const byType = new Map();
+      for (const tr of areaTracks) {
+        const rt = tr.raceType || 'Uncategorized';
+        if (!byType.has(rt)) byType.set(rt, []);
+        byType.get(rt).push(tr);
+      }
+
+      const areaDetails = document.createElement('details');
+      areaDetails.className = 'folder';
+      areaDetails.open = true;
+
+      const sum = document.createElement('summary');
+      sum.innerHTML = `<b>${escapeHtml(area)}</b> <span class="pill">${areaTracks.length}</span>`;
+      areaDetails.appendChild(sum);
+
+      const areaContent = document.createElement('div');
+      areaContent.className = 'content';
+
+      const types = Array.from(byType.keys()).sort((a,b)=>a.localeCompare(b));
+      for (const rt of types) {
+        const typeTracks = byType.get(rt).sort((a,b)=>a.name.localeCompare(b.name));
+
+        const typeDetails = document.createElement('details');
+        typeDetails.className = 'subfolder';
+        typeDetails.open = true;
+
+        const sum2 = document.createElement('summary');
+        sum2.innerHTML = `<b>${escapeHtml(rt)}</b> <span class="pill">${typeTracks.length}</span>`;
+        typeDetails.appendChild(sum2);
+
+        const typeContent = document.createElement('div');
+        typeContent.className = 'content';
+
+        for (const tr of typeTracks) {
+          const item = document.createElement('div');
+          item.className = 'track-item';
+
+          const name = document.createElement('div');
+          name.className = 'name';
+          name.title = tr.name;
+          name.textContent = tr.name + (tr.hidden ? ` ${t('hiddenTag')}` : '');
+          name.onclick = ()=>{
+            const b = calcBoundsFromFeature(tr.feature);
+            if (b && b.isValid()) map.fitBounds(b);
+          };
+
+          const zoomBtn = document.createElement('button');
+          zoomBtn.className = 'btn-mini';
+          zoomBtn.textContent = t('zoom');
+          zoomBtn.onclick = ()=>{
+            const b = calcBoundsFromFeature(tr.feature);
+            if (b && b.isValid()) map.fitBounds(b);
+          };
+
+          const editBtn = document.createElement('button');
+          editBtn.className = 'btn-mini';
+          editBtn.textContent = t('edit');
+          editBtn.onclick = ()=>{
+            openTrackModal({
+              mode:'edit',
+              targetId: tr.id,
+              tempLayer: null,
+              kind: tr.kind,
+              preset: {
+                name: tr.name,
+                area: tr.area,
+                type: tr.raceType,
+                hidden: tr.hidden,
+                applyStyle: false
+              }
+            });
+          };
+
+          const hideBtn = document.createElement('button');
+          hideBtn.className = 'btn-mini';
+          hideBtn.textContent = tr.hidden ? t('unhide') : t('hide');
+          hideBtn.onclick = ()=>{
+            tr.hidden = !tr.hidden;
+            saveTracks();
+            refreshRenderedForTrack(tr); // removes from map if hidden
+            renderMenu();
+          };
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn-mini';
+          delBtn.textContent = 'X';
+          delBtn.onclick = ()=>{
+            if (!confirm(t('confirmDelete'))) return;
+            // remove render
+            unrenderTrackFromMap(tr.id);
+            tracks = tracks.filter(x => x.id !== tr.id);
+            saveTracks();
+            renderMenu();
+          };
+
+          item.appendChild(name);
+          item.appendChild(zoomBtn);
+          item.appendChild(editBtn);
+          item.appendChild(hideBtn);
+          item.appendChild(delBtn);
+
+          typeContent.appendChild(item);
+        }
+
+        typeDetails.appendChild(typeContent);
+        areaContent.appendChild(typeDetails);
+      }
+
+      areaDetails.appendChild(areaContent);
+      container.appendChild(areaDetails);
+    }
+  }
+
+  // =========================
+  // BUTTONS: clear, export/import, png
+  // =========================
+  document.getElementById('clearAllBtn').addEventListener('click', ()=>{
+    if (!confirm(t('confirmClear'))) return;
+    // remove all rendered
+    Object.keys(rendered).forEach(id => unrenderTrackFromMap(id));
+    // clear data
+    tracks = [];
+    saveTracks();
+    renderMenu();
+  });
+
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    document.getElementById('exportArea').value = localStorage.getItem(TRACKS_KEY) || "[]";
+  });
+
+  document.getElementById('importBtn').addEventListener('click', ()=>{
+    const text = (document.getElementById('exportArea').value || "").trim();
+    if (!text) return;
+    try {
+      const arr = JSON.parse(text);
+      if (!Array.isArray(arr)) throw new Error("Not array");
+
+      // wipe
+      Object.keys(rendered).forEach(id => unrenderTrackFromMap(id));
+      tracks = [];
+
+      // load
+      tracks = arr;
+
+      // ensure library values exist
+      tracks.forEach(tr => ensureLibraryValue(tr.area, tr.raceType));
+      saveLibrary();
+      rebuildFilterSelects();
+      renderChips();
+
+      saveTracks();
+      renderAllVisible();
+      renderMenu();
+      alert(t('importOk'));
+    } catch {
+      alert(t('importBad'));
+    }
+  });
+
+  document.getElementById('pngBtn').addEventListener('click', ()=>{
+    leafletImage(map, (err, canvas)=>{
+      if (err) { console.error(err); alert(t('pngFail')); return; }
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = 'gta5-map.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+  });
+
+  // =========================
+  // INIT
+  // =========================
+  (function init(){
+    loadLibrary();
+    loadTracks();
+
+    rebuildFilterSelects();
+    renderChips();
+
+    applyLanguage();
+    renderAllVisible();
+    renderMenu();
+  })();
+</script>
+</body>
+</html>
