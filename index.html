@@ -197,7 +197,10 @@
   <div style="margin-top:6px;">
     <button id="exportBtn">Export</button>
     <button id="importBtn">Import</button>
+    <button id="saveGitBtn">Gem til GitHub</button>
+    <button id="loadGitBtn">Hent fra GitHub</button>
   </div>
+  <small id="gitStatus" class="muted" style="display:block;margin-top:6px;"></small>
 
   <small id="ui_png_tip" style="display:block;margin-top:8px;" class="muted">
     PNG-export virker bedst via localhost (stadig kun dig). file:// kan give CORS-fejl i nogle browsere.
@@ -310,7 +313,7 @@
       filterType:"Filter Type",
       export:"Export / Import",
       exportTip:"JSON gemmer alt lokalt (ingen upload). Hidden tracks er kun i menu.",
-      pngTip:"PNG-export virker bedst via localhost (stadig kun dig). file:// kan give CORS-fejl i nogle browsere.",
+      pngTip:"This is Still a DEMO Trying to get it working.",
       noAreas:"(Opret en Area først)",
       noTypes:"(Opret en Type først)",
       all:"(Alle)",
@@ -364,7 +367,7 @@
       filterType:"Filter Type",
       export:"Export / Import",
       exportTip:"JSON stays local (no upload). Hidden tracks are menu-only.",
-      pngTip:"PNG export works best via localhost (still only you). file:// may cause CORS errors in some browsers.",
+      pngTip:"This is Still a DEMO Trying to get it working .",
       noAreas:"(Create an Area first)",
       noTypes:"(Create a Type first)",
       all:"(All)",
@@ -1266,6 +1269,43 @@
       alert(t('importOk'));
     } catch {
       alert(t('importBad'));
+    }
+  });
+
+  // Save current tracks to GitHub as data/tracks.json
+  document.getElementById('saveGitBtn').addEventListener('click', async ()=>{
+    const content = JSON.stringify(tracks, null, 2);
+    const statusEl = document.getElementById('gitStatus');
+    statusEl.textContent = 'Saving...';
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ path: 'data/tracks.json', content, message: 'Update tracks from app' })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Error');
+      statusEl.textContent = 'Saved to GitHub ✅';
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Save failed: ' + err.message;
+    }
+  });
+
+  document.getElementById('loadGitBtn').addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('gitStatus');
+    statusEl.textContent = 'Loading...';
+    try {
+      const res = await fetch('/api/data?path=data/tracks.json');
+      if (!res.ok) throw new Error('File not found on GitHub');
+      const json = await res.json();
+      const content = json.content;
+      document.getElementById('exportArea').value = content;
+      document.getElementById('importBtn').click();
+      statusEl.textContent = 'Loaded from GitHub ✅';
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Load failed: ' + err.message;
     }
   });
 
