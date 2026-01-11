@@ -239,12 +239,9 @@
   <div style="margin-top:6px;">
     <button id="exportBtn" title="Export / Import" aria-label="Export">📤</button>
     <button id="importBtn" title="Export / Import" aria-label="Import">📥</button>
-    <button id="saveGitBtn">Gem til GitHub</button>
-    <button id="saveSafeBtn" title="Gem til Safe-file">Gem Safe</button>
-    <button id="setSafeBtn" title="Indstil Safe-file">Indstil Safe</button>
-    <button id="loadGitBtn">Hent fra GitHub</button>
-    <button id="saveAllFilesBtn">Gem alle som filer</button>
-    <button id="listFilesBtn">Vis track-filer</button>
+    <button id="uploadBtn" title="Upload save fra din computer">Upload Save</button>
+    <input id="uploadInput" type="file" accept=".json,application/json" style="display:none">
+    <button id="downloadBtn" title="Download save til din computer">Download Save</button>
   </div>
   <small id="gitStatus" class="muted" style="display:block;margin-top:6px;"></small>
   <small id="safeFileLabel" class="muted" style="display:block;margin-top:6px;"></small>
@@ -1391,88 +1388,8 @@
     }
   });
 
-  // helper to sanitize filenames
-  function sanitizeFilename(name){
-    return name.trim().toLowerCase().replace(/[^a-z0-9-_]+/g,'-').replace(/^-+|-+$/g,'').substring(0,120) || 'track';
-  }
 
-  // Save current tracks to GitHub (prompt to create a new file or overwrite)
-  document.getElementById('saveGitBtn').addEventListener('click', async ()=>{
-    const content = JSON.stringify(tracks, null, 2);
-    const statusEl = document.getElementById('gitStatus');
-    const name = prompt('Save to GitHub:\n- Enter a NAME to create data/tracks/<name>.json\n- Or leave empty to overwrite data/tracks.json', '');
-    statusEl.textContent = 'Saving...';
-    try {
-      if (name && name.trim()) {
-        // create/update a new track file under data/tracks/<sanitized>.json using track/save endpoint
-        const res = await fetch('/api/track/save', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ name: name.trim(), content, message: `Save ${name.trim()} from app` })
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.message || 'Error');
-        const path = json.path || (`data/tracks/${name.trim()}.json`);
-        statusEl.textContent = `Saved to ${path} ✅`;
-        if (confirm('Make this the safe file for quick saves?')) {
-          localStorage.setItem('gta5-safe-file', path);
-          updateSafeLabel();
-        }
-      } else {
-        // overwrite canonical file
-        const res = await fetch('/api/data', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ path: 'data/tracks.json', content, message: 'Update tracks from app' })
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.message || 'Error');
-        statusEl.textContent = 'Saved to data/tracks.json ✅';
-      }
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent = 'Save failed: ' + err.message;
-    }
-  });
-
-  // Save to the configured "safe" file (set via Set Safe button or when saving a new file)
-  document.getElementById('saveSafeBtn').addEventListener('click', async ()=>{
-    const statusEl = document.getElementById('gitStatus');
-    let path = localStorage.getItem('gta5-safe-file');
-    if (!path) {
-      if (!confirm('No safe file set. Do you want to set one now?')) return;
-      const name = prompt('Enter safe filename (e.g. my-safe or full path data/tracks/my-safe.json):', '');
-      if (!name) return;
-      path = name.includes('/') ? name : `data/tracks/${sanitizeFilename(name)}.json`;
-      localStorage.setItem('gta5-safe-file', path);
-      updateSafeLabel();
-    }
-    const content = JSON.stringify(tracks, null, 2);
-    statusEl.textContent = 'Saving to safe file...';
-    try {
-      const res = await fetch('/api/data', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ path, content, message: 'Update safe file from app' })
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Error');
-      statusEl.textContent = `Saved to ${path} ✅`;
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent = 'Save failed: ' + err.message;
-    }
-  });
-
-  // Set or change the safe file path
-  document.getElementById('setSafeBtn').addEventListener('click', ()=>{
-    const name = prompt('Enter safe filename (e.g. my-safe or full path data/tracks/my-safe.json):', '');
-    if (!name) return;
-    const path = name.includes('/') ? name : `data/tracks/${sanitizeFilename(name)}.json`;
-    localStorage.setItem('gta5-safe-file', path);
-    updateSafeLabel();
-  });
-
+  // Update safe label (kept for information about configured safe file)
   function updateSafeLabel(){
     const sf = localStorage.getItem('gta5-safe-file');
     const el = document.getElementById('safeFileLabel');
@@ -1481,73 +1398,83 @@
     else el.textContent = 'Safe file: (not set)';
   }
 
-  document.getElementById('loadGitBtn').addEventListener('click', async ()=>{
-    const statusEl = document.getElementById('gitStatus');
-    statusEl.textContent = 'Loading...';
-    try {
-      const res = await fetch('/api/data?path=data/tracks.json');
-      if (!res.ok) throw new Error('File not found on GitHub');
-      const json = await res.json();
-      const content = json.content;
-      document.getElementById('exportArea').value = content;
-      document.getElementById('importBtn').click();
-      statusEl.textContent = 'Loaded from GitHub ✅';
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent = 'Load failed: ' + err.message;
-    }
+
+
+  // Download current tracks as a JSON file to the user's computer
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    const content = JSON.stringify(tracks, null, 2);
+    const filename = 'tracks.json';
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 
-  // Save all tracks as individual files under data/tracks/
-  document.getElementById('saveAllFilesBtn').addEventListener('click', async ()=>{
+  // Upload a save file from user's computer (JSON)
+  document.getElementById('uploadBtn').addEventListener('click', ()=>{
+    document.getElementById('uploadInput').click();
+  });
+
+  document.getElementById('uploadInput').addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
     const statusEl = document.getElementById('gitStatus');
-    statusEl.textContent = 'Saving all...';
-    let success = 0, fail = 0;
-    for (const tr of tracks) {
-      try {
-        const res = await fetch('/api/track/save', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ name: tr.name, content: JSON.stringify(tr, null, 2), message: `Save ${tr.name} from app` })
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.message || 'Error');
-        success++;
-      } catch (err) {
-        console.error(err);
-        fail++;
+    statusEl.textContent = 'Reading file...';
+    try {
+      const txt = await f.text();
+      let obj = JSON.parse(txt);
+
+      // some server responses wrap actual content inside a 'content' string
+      if (obj && typeof obj === 'object' && typeof obj.content === 'string') {
+        try { obj = JSON.parse(obj.content); } catch (ex) { /* ignore */ }
       }
-    }
-    statusEl.textContent = `Saved ${success} files, ${fail} failed`;
-  });
 
-  // List files in data/tracks and allow loading one into the app
-  document.getElementById('listFilesBtn').addEventListener('click', async ()=>{
-    const statusEl = document.getElementById('gitStatus');
-    statusEl.textContent = 'Listing files...';
-    try {
-      const res = await fetch('/api/list?path=data/tracks');
-      if (!res.ok) throw new Error('Could not list files');
-      const json = await res.json();
-      const names = json.files.map(f => f.name).join('\n');
-      const pick = prompt('Available files:\n' + names + '\n\nType filename to load (e.g. little-soul.json or name without .json)');
-      if (!pick) { statusEl.textContent = ''; return; }
-      const name = pick.endsWith('.json') ? pick.slice(0, -5) : pick;
-      const g = await fetch('/api/track?name=' + encodeURIComponent(name));
-      if (!g.ok) throw new Error('File not found');
-      const gj = await g.json();
-      const obj = JSON.parse(gj.content);
-      // add as new track
-      tracks.push(obj);
+      if (Array.isArray(obj)) {
+        // ask user whether to replace or merge
+        const replace = confirm('Replace current tracks with uploaded file? (OK = Replace, Cancel = Merge)');
+        if (replace) {
+          // replace
+          tracks = obj;
+        } else {
+          // merge: append, avoid id collisions
+          for (const it of obj) {
+            if (!it || typeof it !== 'object') continue;
+            if (!it.id || tracks.some(t => t.id === it.id)) it.id = crypto.randomUUID();
+            tracks.push(it);
+          }
+        }
+      } else if (obj && typeof obj === 'object') {
+        // single track -> append (avoid id collision)
+        if (!obj.id || tracks.some(t => t.id === obj.id)) obj.id = crypto.randomUUID();
+        tracks.push(obj);
+      } else {
+        throw new Error('Invalid JSON format');
+      }
+
+      // ensure library values exist
+      tracks.forEach(tr => ensureLibraryValue(tr.area, tr.raceType));
+      saveLibrary();
       saveTracks();
       renderAllVisible();
       renderMenu();
-      statusEl.textContent = 'Loaded file into app';
+      statusEl.textContent = 'Upload OK';
+      alert('Upload OK');
     } catch (err) {
       console.error(err);
-      statusEl.textContent = 'List/load failed: ' + err.message;
+      statusEl.textContent = 'Upload failed: ' + err.message;
+      alert('Upload failed: ' + err.message);
+    } finally {
+      // reset input so same file can be selected again
+      e.target.value = '';
     }
   });
+
+
 
   function updateArrowsForAll(){
     Object.keys(rendered).forEach(id => {
